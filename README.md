@@ -1,25 +1,25 @@
 # Identity Risk Analyzer
 
-ASP.NET Core MVC application for read-only Active Directory risk analysis.
+Приложение ASP.NET Core MVC для анализа рисков Active Directory в режиме только для чтения.
 
-**Isolated AD test lab:** [scripts/adlab/README.md](scripts/adlab/README.md) contains the P1-16 Windows Server scripts, setup order, verification, expected findings, and cleanup. **FOR ISOLATED TEST ACTIVE DIRECTORY ONLY. DO NOT RUN AGAINST PRODUCTION DOMAIN.**
+**Изолированная тестовая среда AD:** в [scripts/adlab/README.md](scripts/adlab/README.md) описаны скрипты Windows Server этапа P1-16, порядок настройки, проверка, ожидаемые findings и очистка. **ТОЛЬКО ДЛЯ ИЗОЛИРОВАННОЙ ТЕСТОВОЙ ACTIVE DIRECTORY. НЕ ЗАПУСКАТЬ В ПРОИЗВОДСТВЕННОМ ДОМЕНЕ.**
 
-## Active Directory configuration
+## Настройка Active Directory
 
-The `ActiveDirectory` section in `src/IdentityRiskAnalyzer.Web/appsettings.json` contains non-secret connection settings:
+Секция `ActiveDirectory` в `src/IdentityRiskAnalyzer.Web/appsettings.json` содержит настройки подключения, не являющиеся секретами.
 
-| Setting | Description |
+| Параметр | Описание |
 | --- | --- |
-| `Server` | Active Directory LDAP server hostname |
-| `Port` | LDAP server port |
-| `UseSsl` | Enables LDAPS when `true` |
-| `BaseDn` | Directory base distinguished name used by the connection test |
-| `ConnectTimeoutSeconds` | Maximum LDAP operation timeout in seconds |
-| `PageSize` | Maximum number of LDAP entries requested per result page (1–1000) |
+| `Server` | Имя LDAP-сервера Active Directory |
+| `Port` | Порт LDAP-сервера |
+| `UseSsl` | Включает LDAPS при значении `true` |
+| `BaseDn` | Базовое distinguished name каталога для проверки подключения |
+| `ConnectTimeoutSeconds` | Максимальное время LDAP-операции в секундах |
+| `PageSize` | Максимум LDAP-записей в странице результатов (1–1000) |
 
-Port 389 is typically used for LDAP. Port 636 is typically used for LDAPS. The server certificate must be trusted by the host running the application.
+Для LDAP обычно используется порт 389, для LDAPS — 636. Сертификат сервера должен быть доверенным на компьютере с приложением.
 
-For a deployment with a trusted domain controller certificate, use LDAPS:
+Пример настройки LDAPS для контроллера домена с доверенным сертификатом:
 
 ```json
 {
@@ -32,143 +32,143 @@ For a deployment with a trusted domain controller certificate, use LDAPS:
 }
 ```
 
-Use the DC DNS hostname covered by its certificate. `UseSsl=true` enables LDAPS immediately on the configured port (normally 636); it does not enable StartTLS. The application uses the operating system's certificate validation and does not accept untrusted or mismatched certificates, including in Development. Explicit credentials remain in User Secrets or protected deployment configuration. The isolated lab instructions for CA, DC enrollment, client trust, and verification are in [scripts/adlab/README.md](scripts/adlab/README.md).
+Укажите DNS-имя контроллера, присутствующее в сертификате. `UseSsl=true` включает LDAPS непосредственно на заданном порту (обычно 636), но не включает StartTLS. Используется системная проверка сертификата; недоверенный сертификат или несовпадение имени отклоняются и в Development. Храните явные учётные данные в User Secrets или защищённой конфигурации развёртывания. Инструкции лаборатории по CA, выпуску сертификата DC, доверию клиента и проверке приведены в [scripts/adlab/README.md](scripts/adlab/README.md).
 
-Store explicit credentials with .NET User Secrets during development:
+Для разработки задайте учётные данные через .NET User Secrets:
 
 ```bash
 dotnet user-secrets set "ActiveDirectory:Username" "ADLAB\svc_ira_scanner" --project src/IdentityRiskAnalyzer.Web
 dotnet user-secrets set "ActiveDirectory:Password" "password-here" --project src/IdentityRiskAnalyzer.Web
 ```
 
-When explicit credentials are not configured, LDAP Negotiate uses the current process identity where supported. Never store production credentials in `appsettings.json`, README files, or source control. For production, provide secrets through the deployment environment's protected configuration system.
+Без явных учётных данных LDAP Negotiate использует текущую identity процесса там, где это поддерживается. Не храните production credentials в `appsettings.json`, README или системе контроля версий. Для production используйте защищённую систему конфигурации среды развёртывания.
 
-Open `/ActiveDirectory` to review the safe connection settings and submit the **Test Connection** form. The test performs an LDAP bind and a base-scope query for the configured Base DN; it does not enumerate users or groups.
+Откройте `/ActiveDirectory` и отправьте форму **Test Connection**. Проверка выполняет LDAP bind и запрос с областью Base для настроенного Base DN; пользователей и группы она не перечисляет.
 
-## Reading Active Directory users
+## Чтение пользователей Active Directory
 
-The `/ActiveDirectory/Users` diagnostic page reads users from the configured `BaseDn` using LDAP subtree search and server-side paging. It requests only the attributes used by this stage and returns user records in memory; it does not save a scan or enumerate groups. The page displays at most the first 100 users even when the LDAP collection contains more.
+Страница `/ActiveDirectory/Users` загружает пользователей из `BaseDn` через LDAP subtree search с постраничной выдачей сервера. Она запрашивает только нужные атрибуты и держит результаты в памяти; scan не сохраняется, группы не загружаются. На странице показываются первые 100 пользователей.
 
-`lastLogonTimestamp` is a replicated value and is presented as **Last Known Activity**, not as an exact last logon time. The application does not request or read user passwords or password hashes.
+`lastLogonTimestamp` — реплицируемое значение. В интерфейсе оно обозначено как **Last Known Activity** («последняя известная активность»), а не точное время последнего входа. Приложение не запрашивает и не читает пароли или password hashes.
 
-## Reading Active Directory groups
+## Чтение групп Active Directory
 
-The `/ActiveDirectory/Groups` diagnostic page reads groups below the configured `BaseDn` with an LDAP subtree search and the same server-side paging setting used for users. It collects each group's direct `member` distinguished names, along with the group's GUID, SID, group type, description, and manager. Large `member` values use Active Directory ranged retrieval; if an additional range cannot be read, collected members are retained and the group is marked incomplete. Nested membership is not calculated, and all collection is read-only and held in memory for the request.
+Страница `/ActiveDirectory/Groups` загружает все группы под `BaseDn` с помощью LDAP subtree search и того же серверного paging, что используется для пользователей. Собираются непосредственные DN участников, GUID, SID, тип, описание и управляющий объект группы. Для больших значений `member` используется ranged retrieval Active Directory. Если дополнительный диапазон получить не удалось, уже прочитанные участники сохраняются, а группа помечается как неполная. Вложенное членство не рассчитывается. Сбор только для чтения, данные хранятся в памяти на время запроса.
 
-## Nested group analysis
+## Анализ вложенных групп
 
-The group graph is built locally from the loaded users and groups. Direct edges come from each group's `member` DNs; the graph resolves those DNs against case-insensitive in-memory user and group indexes. A breadth-first traversal finds the shortest path to each group, counts depth in group edges, and guards against cycles and self-references. `primaryGroupID` is resolved by combining it with the user's domain SID and matching the resulting SID against loaded groups. Foreign security principals or other members absent from the loaded collections are ignored; cross-domain resolution is not performed. `/ActiveDirectory/Users/{objectGuid}/Groups` displays direct and nested paths. The traversal depth limit is configured by `GroupAnalysis:MaxGroupNestingDepth` and defaults to 64.
+Граф строится локально из загруженных пользователей и групп. Прямые связи берутся из атрибута `member` группы; DN сопоставляются через регистронезависимые индексы в памяти. Обход в ширину находит кратчайший путь к каждой группе, считает глубину по рёбрам между группами и защищён от циклов и ссылок на саму себя. `primaryGroupID` разрешается добавлением RID к SID домена пользователя и поиском полученного SID среди загруженных групп. Foreign security principals и другие отсутствующие в наборе объекты игнорируются; междоменное разрешение не выполняется. Страница `/ActiveDirectory/Users/{objectGuid}/Groups` отображает прямые и вложенные пути. Максимальная глубина задаётся через `GroupAnalysis:MaxGroupNestingDepth` и по умолчанию равна 64.
 
-## Privileged group analysis
+## Анализ привилегированных групп
 
-`PrivilegeAnalysis:PrivilegedGroups` in `appsettings.json` configures which groups grant administrative membership. The defaults include Domain Admins, Enterprise Admins, Schema Admins, Administrators, Account Operators, Server Operators, Backup Operators, and DNSAdmins. Domain Admins, Enterprise Admins, and Schema Admins use their domain-relative RIDs (512, 519, and 518); built-in groups use their well-known SIDs. DNSAdmins uses a configured name because its domain-relative RID is variable. SID/RID matches continue to work if a group is renamed; case-insensitive configured-name matching is the fallback. Add a custom group by adding a definition with its `Name` and optionally a `Sid` or `Rid`, or set `Enabled` to `false` to disable a definition. The analyzer only classifies existing membership paths: it does not infer privilege from words such as “Admin”, perform LDAP lookups, create risk findings, or modify Active Directory. The users list and user group page show whether the user has direct or nested paths to configured privileged groups, including every matched role and its full shortest path.
+Параметр `PrivilegeAnalysis:PrivilegedGroups` в `appsettings.json` определяет группы, членство в которых считается административным. По умолчанию настроены Domain Admins, Enterprise Admins, Schema Admins, Administrators, Account Operators, Server Operators, Backup Operators и DNSAdmins. Для первых трёх применяются доменные RID 512, 519 и 518; для встроенных групп — общеизвестные SID. Для DNSAdmins используется настроенное имя, поскольку её RID зависит от домена. Сопоставление по SID/RID сохраняется после переименования группы; запасной способ — регистронезависимое сравнение настроенного имени. Пользовательскую группу добавляют определением с `Name` и, при необходимости, `Sid` или `Rid`; `Enabled=false` отключает определение. Анализатор классифицирует только существующие пути членства: он не выводит привилегии из слова “Admin”, не обращается к LDAP, не создаёт findings и не меняет AD. Список пользователей и страница групп пользователя показывают прямые и вложенные пути ко всем настроенным привилегированным группам.
 
-## Kerberos Delegation Analysis
+## Анализ Kerberos Delegation
 
-Delegation analysis uses the LDAP attributes already collected for users. `userAccountControl` identifies unconstrained delegation and the protocol-transition flag; `msDS-AllowedToDelegateTo` provides constrained-delegation targets; presence of `msDS-AllowedToActOnBehalfOfOtherIdentity` identifies an RBCD configuration. Protocol Transition is reported instead of a second Constrained result for the same target list. Independent mechanisms such as Unconstrained Delegation and RBCD remain separate results. `NOT_DELEGATED` by itself is informational protection and does not create a delegation result. The account page shows detected mechanisms, targets, and evidence. RBCD ACL contents are not parsed in this MVP, and the application does not change delegation settings.
+Анализ использует собранные LDAP-атрибуты пользователей. `userAccountControl` определяет unconstrained delegation и флаг protocol transition; `msDS-AllowedToDelegateTo` задаёт цели constrained delegation; наличие `msDS-AllowedToActOnBehalfOfOtherIdentity` указывает на RBCD. Для одного списка целей Protocol Transition отображается вместо отдельного Constrained результата. Независимые механизмы, например Unconstrained Delegation и RBCD, показываются отдельно. Один лишь `NOT_DELEGATED` означает защиту и не создаёт результата delegation. Страница учётной записи отображает обнаруженные механизмы, цели и evidence. ACL RBCD в MVP не разбирается; настройки delegation не меняются.
 
-## Service Account Detection
+## Определение сервисных учётных записей
 
-Service-account classification uses the LDAP records already collected plus one paged subtree search for managed service accounts. Any collected `servicePrincipalName` is a strong signal; `msDS-ManagedServiceAccount` and `msDS-GroupManagedServiceAccount` object classes are definitive signals. The ordinary user filter remains unchanged because MSA/gMSA objects are computer subclasses; the separate batch search collects them without an LDAP request per account. `/ActiveDirectory/Users` and the user details page include these records.
+Классификация использует уже загруженные LDAP-записи и один пакетный subtree search для managed service accounts. Наличие `servicePrincipalName` — сильный признак; классы `msDS-ManagedServiceAccount` и `msDS-GroupManagedServiceAccount` — однозначные. Обычный фильтр пользователей не меняется, поскольку MSA/gMSA являются подклассами компьютеров; отдельный пакетный поиск не делает LDAP-запрос для каждой записи. Эти записи отображаются на `/ActiveDirectory/Users` и странице пользователя.
 
-Optional account-name heuristics are controlled by `ServiceAccountAnalysis:EnableNameHeuristics` and `ServiceAccountAnalysis:NamePatterns` in `appsettings.json`; the defaults are `svc_*`, `service_*`, and `sa_*`. Patterns are case-insensitive globs using `*`, not regular expressions. A pattern-only match is shown as **Possible** with **Heuristic** confidence. SPN matches are **High** confidence; MSA/gMSA matches are **Definitive**. Multiple independent signal types are identified separately. Password expiry, privilege membership, and delegation do not influence this classification. Interactive logon policy is not evaluated because effective rights depend on GPO user-right assignments; the details page states this limitation. Classification is read-only and does not create risk findings or change Active Directory.
+Необязательные эвристики имени задаются параметрами `ServiceAccountAnalysis:EnableNameHeuristics` и `ServiceAccountAnalysis:NamePatterns` в `appsettings.json`. По умолчанию используются `svc_*`, `service_*` и `sa_*`. Это маски с `*` без учёта регистра, а не регулярные выражения. Совпадение только по маске отображается как **Possible** с уверенностью **Heuristic**. Совпадение по SPN имеет уровень **High**, совпадение по MSA/gMSA — **Definitive**. Разные признаки указываются отдельно. Срок пароля, привилегии и delegation на классификацию не влияют. Политика интерактивного входа не анализируется, так как эффективные права зависят от назначений пользовательских прав в GPO; ограничение указано на странице подробностей. Классификация только для чтения и не создаёт findings.
 
-## Risk Rule Engine
+## Механизм правил риска
 
-The account details page runs the deterministic, read-only risk rules against the LDAP record and the existing privilege, delegation, service-account, and duplicate-SPN analysis results. Findings are previews only; P1-10 does not persist them or calculate an object or directory score. Each finding carries its stable rule ID, severity, points, evidence, and a fixed recommendation. Rule errors are logged independently and do not prevent the remaining rules from running.
+Страница учётной записи запускает детерминированные правила только для чтения над LDAP-записью и результатами анализа привилегий, delegation, сервисных учётных записей и дублирующихся SPN. На этапе P1-10 findings являются предварительным просмотром и ещё не сохраняются; оценка объекта и каталога также не рассчитывается. Каждый finding содержит постоянный RuleId, severity, баллы, evidence и фиксированную рекомендацию. Ошибка одного правила записывается в журнал и не мешает остальным правилам.
 
-Thresholds and rule severity/points are configured under `RiskSettings` in `src/IdentityRiskAnalyzer.Web/appsettings.json`. Age thresholds are inclusive. `CurrentUtc` is passed into the evaluation context, and current account lockout is determined from the `LOCKOUT` bit in `msDS-User-Account-Control-Computed`; historical `lockoutTime` alone is not treated as a current lock.
+Пороги, severity и баллы задаются в `RiskSettings` файла `src/IdentityRiskAnalyzer.Web/appsettings.json`. Порог возраста включительный. Текущее время передаётся как `CurrentUtc`. Текущая блокировка определяется по флагу `LOCKOUT` в `msDS-User-Account-Control-Computed`; одного исторического `lockoutTime` недостаточно.
 
-| RuleId | Name and condition | Default severity | Default points |
+| RuleId | Условие | Severity | Баллы |
 | --- | --- | --- | ---: |
-| IRA-ACCOUNT-001 | Enabled account activity age reaches `InactiveUserDays` | Medium | 15 |
-| IRA-ACCOUNT-002 | Account expiration is earlier than evaluation time | Low | 10 |
-| IRA-ACCOUNT-003 | Computed UAC contains the current `LOCKOUT` flag | Low | 5 |
-| IRA-PASSWORD-001 | UAC contains `DONT_EXPIRE_PASSWORD` | Medium | 15 |
-| IRA-PASSWORD-002 | Password age reaches `OldPasswordDays` | Medium | 10 |
-| IRA-SERVICE-001 | Classified service account also has `DONT_EXPIRE_PASSWORD` | High | 25 |
-| IRA-PRIV-001 | Direct path to a configured privileged group | High | 30 |
-| IRA-PRIV-002 | Nested path to a configured privileged group | High | 30 |
-| IRA-PRIV-003 | At least two distinct privileged target groups | Medium | 20 |
-| IRA-PRIV-004 | Enabled privileged account activity age reaches `InactivePrivilegedUserDays` | High | 30 |
-| IRA-DELEGATION-001 | Unconstrained delegation result exists | Critical | 50 |
-| IRA-DELEGATION-002 | Constrained delegation result exists | Medium | 20 |
-| IRA-DELEGATION-003 | Protocol Transition result exists | High | 35 |
-| IRA-DELEGATION-004 | Resource-Based Constrained Delegation is configured | High | 25 |
-| IRA-AD-001 | SIDHistory values are present | Medium | 15 |
-| IRA-SPN-001 | An SPN is assigned to multiple distinct objects | High | 25 |
+| IRA-ACCOUNT-001 | Возраст активности включённой учётной записи достиг `InactiveUserDays` | Medium | 15 |
+| IRA-ACCOUNT-002 | Срок действия учётной записи истёк | Low | 10 |
+| IRA-ACCOUNT-003 | Вычисленный UAC содержит текущий флаг `LOCKOUT` | Low | 5 |
+| IRA-PASSWORD-001 | UAC содержит `DONT_EXPIRE_PASSWORD` | Medium | 15 |
+| IRA-PASSWORD-002 | Возраст пароля достиг `OldPasswordDays` | Medium | 10 |
+| IRA-SERVICE-001 | У сервисной учётной записи также установлен `DONT_EXPIRE_PASSWORD` | High | 25 |
+| IRA-PRIV-001 | Прямой путь к привилегированной группе | High | 30 |
+| IRA-PRIV-002 | Вложенный путь к привилегированной группе | High | 30 |
+| IRA-PRIV-003 | Найдены как минимум две разные привилегированные группы | Medium | 20 |
+| IRA-PRIV-004 | Возраст активности включённой привилегированной учётной записи достиг `InactivePrivilegedUserDays` | High | 30 |
+| IRA-DELEGATION-001 | Настроена unconstrained delegation | Critical | 50 |
+| IRA-DELEGATION-002 | Найдена constrained delegation | Medium | 20 |
+| IRA-DELEGATION-003 | Найден Protocol Transition | High | 35 |
+| IRA-DELEGATION-004 | Настроена Resource-Based Constrained Delegation | High | 25 |
+| IRA-AD-001 | Присутствует SIDHistory | Medium | 15 |
+| IRA-SPN-001 | SPN назначен нескольким разным объектам | High | 25 |
 
-Duplicate SPNs are compared case-insensitively across collected user and managed-service-account principals; repeated values on one object alone are not considered a duplicate. Points are configured weights for individual findings and are not summed in this stage. No rule changes Active Directory, and the findings preview uses Razor's normal HTML encoding for evidence.
+Дубли SPN сравниваются без учёта регистра среди загруженных пользователей и managed service accounts; повтор SPN у одного объекта сам по себе дубликатом не считается. На этом этапе баллы являются весами отдельных findings и не суммируются. AD не изменяется; Razor стандартно кодирует evidence при отображении.
 
-## Risk Scoring
+## Расчёт Risk Score
 
-P1-11 adds an explainable project-specific MVP scoring model. For each object, findings are deduplicated by object, RuleId, category, and evidence/target; findings with the same RuleId but different targets remain separate.
+В P1-11 добавлена объяснимая модель оценки MVP. Findings каждого объекта удаляются как дубликаты по объекту, RuleId, категории и evidence/цели. Записи с одинаковым RuleId, но разными целями, сохраняются отдельно.
 
 ```text
 RawScore = sum(max(RiskPoints, 0) for each distinct finding)
 Object Risk Score = clamp(RawScore, 0, 100)
 ```
 
-The displayed object score uses the 0–100 capped value. RawScore is retained separately (saturated at `Int32.MaxValue` if needed) for diagnostics. Default Object Risk Level thresholds are configurable through `RiskSettings:MediumFrom`, `RiskSettings:HighFrom`, and `RiskSettings:CriticalFrom`:
+Отображаемая оценка объекта ограничена диапазоном 0–100. RawScore хранится отдельно (при необходимости ограничивается значением `Int32.MaxValue`) для диагностики. Пороги Object Risk Level задаются через `RiskSettings:MediumFrom`, `RiskSettings:HighFrom` и `RiskSettings:CriticalFrom`.
 
-| Score | Object Risk Level |
+| Оценка | Уровень риска |
 | ---: | --- |
 | 0–24 | Low |
 | 25–49 | Medium |
 | 50–74 | High |
 | 75–100 | Critical |
 
-Configuration validation requires `0 <= MediumFrom < HighFrom < CriticalFrom <= 100`. Object level is determined by the score thresholds, not inherited from the most severe finding. Finding severity remains a separate count/display value; no hidden multipliers are applied.
+Проверка конфигурации требует `0 <= MediumFrom < HighFrom < CriticalFrom <= 100`. Уровень объекта определяется его оценкой, а не наиболее высоким severity из findings. Severity finding учитывается отдельно; скрытые множители не применяются.
 
-For a non-empty analyzed directory, the summary uses:
+Для непустого набора анализируемых объектов сводка рассчитывается так:
 
 ```text
 AverageObjectRisk = average(Object Risk Score for all analyzed objects)
 AD Security Score = round(100 - AverageObjectRisk, nearest integer, midpoint away from zero)
 ```
 
-The result is clamped to 0–100. An empty object set returns `SecurityScore = null` and `AverageRiskScore = null`; absence of data is not treated as a perfect score. The summary also reports object-level and finding-level severity counts, category totals and affected-object counts, and a configurable top-N list ordered by risk score, critical finding count, finding count, then stable object name/GUID. AD Security Score does not replace the critical/high counters. A score of 0 means low detected risk under the currently implemented rules; an AD Security Score of 100 means the lowest average detected risk. These project-specific scores are not an industry or Microsoft standard.
+Результат ограничивается диапазоном 0–100. Для пустого набора объектов `SecurityScore = null` и `AverageRiskScore = null`: отсутствие данных не считается идеальной оценкой. Сводка также показывает количество объектов и findings по severity, итоги по категориям и числу затронутых объектов, а также настраиваемый Top-N список, сортируемый по Risk Score, числу Critical findings, общему числу findings, имени и GUID. AD Security Score не заменяет счётчики Critical/High. Нулевая оценка объекта означает низкий обнаруженный риск по действующим правилам; AD Security Score 100 — минимальный средний обнаруженный риск. Это проектные оценки, не стандарт Microsoft или отрасли.
 
-## Scan Pipeline
+## Конвейер Scan
 
-`/Scans` starts a request-driven, read-only directory scan. Each scan creates a `Running` row before LDAP collection. The pipeline collects users, managed service accounts, and groups once each; builds group membership paths locally; classifies privileged and service accounts; analyzes delegation and duplicate SPNs; evaluates risk rules; calculates object and AD Security Scores; and saves a SQLite snapshot. `ObjectsScanned` counts unique principals that completed risk evaluation, including managed service accounts, not loaded groups. The final snapshot uses one short SQLite transaction after LDAP and analysis. The existing `InitialCreate` migration is applied automatically at startup; P1-12 makes no schema changes.
+Маршрут `/Scans` запускает scan каталога в HTTP-запросе и только для чтения. До LDAP-сбора создаётся запись со статусом `Running`. Конвейер по одному разу загружает пользователей, managed service accounts и группы; строит пути членства локально; анализирует привилегии и сервисные учётные записи, delegation и дубли SPN; запускает правила риска; рассчитывает оценки объектов и AD; сохраняет снимок SQLite. `ObjectsScanned` — число уникальных principals, успешно прошедших оценку, включая managed service accounts, но без групп. Снимок сохраняется в короткой транзакции после LDAP и анализа. Миграция `InitialCreate` применяется при запуске; этап P1-12 не менял схему базы.
 
-The terminal status is `Completed` when there are no recoverable errors, `CompletedWithErrors` when one principal or rule failed or a group's member list is incomplete, `Failed` for a fatal LDAP, analysis, or persistence failure, and `Cancelled` for request cancellation. The run's finish time is stored in UTC. `ErrorsCount` counts rule failures, isolated principal failures, and groups with incomplete direct member lists; individual LDAP entries skipped inside a collector currently appear in server warnings and cannot yet be counted in the run. A database outage can prevent the terminal status from being saved; inspect server logs in that case.
+Итоговый статус — `Completed` без recoverable ошибок, `CompletedWithErrors` при ошибке обработки principal или rule либо неполном списке участников группы, `Failed` при критическом сбое LDAP, анализа или сохранения, `Cancelled` при отмене запроса. Время завершения хранится в UTC. `ErrorsCount` учитывает ошибки правил и principals, а также неполные списки участников групп. Пропущенные LDAP-записи сейчас отражаются только в серверном журнале. Сбой базы может помешать сохранению итогового статуса; в таком случае проверьте журналы сервера.
 
-Every scan keeps separate object snapshots, all shortest group membership paths, delegation mechanisms, and the exact deduplicated findings used for scoring. `GroupMembership.PathJson` is a JSON array of display names from principal to target group. Previous scans are never overwritten. `/Scans/{id}` reads the persisted summary, severity counts, top accounts, and recent findings from SQLite without LDAP. Only one scan can run at a time per application instance; multiple application instances do not coordinate. Scans run within the HTTP request, so request cancellation or time limits apply. No AD records or settings are modified.
+Каждый scan сохраняет отдельные снимки объектов, кратчайшие пути членства, механизмы delegation и точный дедуплицированный набор findings, использованный для расчёта. `GroupMembership.PathJson` — JSON-массив отображаемых имён от principal до группы. История не перезаписывается. `/Scans/{id}` читает сохранённую сводку, severity, Top Accounts и последние findings из SQLite, без LDAP. В одном экземпляре приложения одновременно выполняется не более одного scan; несколько экземпляров между собой не координируются. Scan выполняется внутри HTTP-запроса и зависит от его отмены и лимитов времени. Записи AD не изменяются.
 
 ## Dashboard
 
-`/` and `/Dashboard` display the latest `Completed` or `CompletedWithErrors` ScanRun using SQLite only. The page identifies the ScanRun ID and UTC timestamp. A later `Failed` attempt appears as a separate warning and never replaces the last usable security snapshot. If no usable scan exists, the page shows an empty state and a Start Scan action. Opening the dashboard does not contact Active Directory.
+Маршруты `/` и `/Dashboard` показывают последний ScanRun со статусом `Completed` или `CompletedWithErrors`, используя только SQLite. Отображается ID ScanRun и время UTC. Более поздняя неудачная попытка показывается отдельным предупреждением и не заменяет последний пригодный снимок. Если успешных scans ещё не было, показывается пустое состояние и кнопка Start Scan. Dashboard не подключается к AD.
 
-The prominent **AD Security Score** runs from 0 to 100, with 100 representing lower average detected risk. **Account Risk Score** runs in the opposite direction. A null security score appears as **No data**. Findings and accounts are counted separately by severity. Other counters include analysed, service, privileged, and stale accounts. **Stale Accounts** counts distinct object GUIDs with saved finding `IRA-ACCOUNT-001`; the dashboard does not recalculate inactivity rules. Top risky accounts follow risk score, critical finding count, total finding count, stable name, and GUID order. Categories come from saved findings and include distinct affected-account counts.
+Показатель **AD Security Score** находится в диапазоне 0–100; большее значение означает ниже средний обнаруженный риск. **Account Risk Score** направлен в обратную сторону. Для null показывается **No data**. Findings и объекты считаются отдельно по severity. Также отображаются количества проанализированных, сервисных, привилегированных и неактивных записей. **Stale Accounts** считает уникальные GUID с сохранённым finding `IRA-ACCOUNT-001` и не пересчитывает правило. Top risky accounts сортируется по score, числу Critical findings, общему количеству findings, имени и GUID. Категории вычисляются из сохранённых findings и включают число разных затронутых объектов.
 
-The history chart and accessible table show up to ten usable ScanRuns in creation order, oldest to newest, on a fixed 0–100 scale. Failed scans are excluded. The chart uses server-rendered HTML and CSS; no Chart.js or frontend build is required. The dashboard also lists high-risk privileged accounts, service accounts ordered by risk score, and the most important findings. Account links open historical account details for the displayed ScanRun.
+График и доступная таблица истории показывают до десяти пригодных ScanRun в порядке создания на шкале 0–100; Failed исключаются. График строится на сервере с HTML и CSS, без Chart.js и сборки frontend. Dashboard также показывает привилегированные аккаунты высокого риска, сервисные аккаунты по убыванию оценки и важные findings. Ссылки открывают исторические сведения об аккаунте для соответствующего scan.
 
-## Historical Account Details
+## Исторические сведения об учётной записи
 
-`/Scans/{scanId}/Objects/{objectGuid}` displays an account from one specific saved ScanRun. The same object GUID can have a different Risk Score, Risk Level, findings, memberships, and delegation in another scan. The page reads only SQLite; it does not contact LDAP or rerun rules or current scoring settings. It shows the saved status, activity, privilege and service-account flags, all saved findings with evidence and recommendations, every privileged path, delegation mechanisms and targets, and all group memberships in pages of 50. Invalid historical `PathJson` or `TargetsJson` produces a visible fallback and a server warning instead of a page failure.
+`/Scans/{scanId}/Objects/{objectGuid}` показывает объект из выбранного сохранённого ScanRun. Для одного GUID разные scans могут содержать разные оценки, уровень риска, findings, членства и delegation. Страница читает только SQLite; она не обращается к LDAP, не повторяет анализ и не применяет текущие параметры оценки. Показываются сохранённый статус, активность, признаки привилегированной и сервисной записи, findings с evidence и рекомендациями, привилегированные пути, delegation и все членства в группах (страницами по 50 строк). Некорректный исторический `PathJson` или `TargetsJson` вызывает безопасное резервное отображение и предупреждение в журнале, но не сбой страницы.
 
-The score breakdown sums nonnegative points from that object's saved findings. The final Account Risk Score and Risk Level remain the stored snapshot values, including when accumulated points exceed the 100-point cap. The historical snapshot currently stores `IsServiceAccount` but not service-account detection method, confidence, or all raw LDAP attributes; the page does not infer or fetch those missing details. Live AD diagnostic pages remain separate from historical scan results.
+Разбор оценки суммирует неотрицательные баллы сохранённых findings. Итоговые Account Risk Score и Risk Level берутся из снимка, даже если сумма выше предела 100. Исторический снимок хранит `IsServiceAccount`, но не способ или уверенность классификации и не все исходные LDAP-атрибуты; страница не выводит отсутствующие данные и не запрашивает их заново. Диагностика текущего AD отделена от исторических результатов.
 
-## CSV Export
+## Экспорт CSV
 
-Completed and CompletedWithErrors scans provide separate **Accounts CSV** and **Findings CSV** downloads from Scan Details. The endpoints are `GET /Scans/{scanId}/Export/Accounts` and `GET /Scans/{scanId}/Export/Findings`. Failed, Running, Cancelled, and missing scans return 404 rather than an apparent empty report. A completed scan with no accounts or findings produces a header-only file.
+Для scans со статусом Completed и CompletedWithErrors доступны отдельные загрузки **Accounts CSV** и **Findings CSV**. Маршруты: `GET /Scans/{scanId}/Export/Accounts` и `GET /Scans/{scanId}/Export/Findings`. Для отсутствующего scan и статусов Failed, Running, Cancelled возвращается 404, а не пустой отчёт. Завершённый scan без аккаунтов или findings даёт файл только с заголовками.
 
-Both reports read the specified historical SQLite snapshot only. Export never contacts LDAP or reruns rules, analysis, or scoring. Accounts include saved account risk values and a grouped count of saved findings; Findings include the saved evidence, recommendation, risk points, and the matching snapshot's object risk score and level. No credentials or passwords are included.
+Оба отчёта читают выбранный исторический снимок SQLite. Экспорт не обращается к LDAP и не пересчитывает анализ, правила или score. Accounts содержит сохранённые оценки и число findings на аккаунт; Findings — сохранённые evidence, рекомендации, баллы и оценки соответствующего объекта. Секреты и пароли не экспортируются.
 
-The files use semicolon delimiters, UTF-8 with a BOM, and CRLF line endings. Text containing semicolons, quotes, or line breaks is quoted and escaped; multiline evidence is preserved. Potential spreadsheet formulas in text fields are prefixed with an apostrophe before CSV escaping. Numeric fields remain numeric. Booleans use lowercase `true` and `false`; unknown nullable booleans and missing dates are empty cells. Timestamps use ISO 8601 UTC with a `Z` suffix. CSV files are generated in memory and named with the numeric ScanRun ID.
+Разделитель — точка с запятой, кодировка — UTF-8 с BOM, окончания строк — CRLF. Текст с разделителем, кавычками или переводом строки экранируется кавычками, многострочное evidence сохраняется. Потенциальная формула таблицы в текстовом поле получает префикс-апостроф. Числа остаются числовыми, логические значения записываются как `true`/`false` в нижнем регистре, неизвестные nullable-значения и даты оставляются пустыми. Время записывается как ISO 8601 UTC с суффиксом `Z`. CSV создаётся в памяти, имя файла содержит ID ScanRun.
 
-## Optional Security Event Log Analysis
+## Необязательный анализ Security Event Log
 
-`SecurityEventLog:Enabled` is `false` by default. When enabled during a ScanRun, the Windows collector reads only Security events 4625 (failed logon), 4771 (Kerberos pre-authentication failure), 4776 (credential validation failure), and 4740 (account lockout) from `SecurityEventLog:Server`, or from `ActiveDirectory:Server` if the override is empty. Event 4740 is retained as context; the two current heuristics count failed-authentication events only. The collector reads an indexed time window (`LookbackMinutes`, default 60) and stops at `MaximumEvents` (default 10,000). It normalizes only event metadata and never reads password or hash data. Repeated record IDs are ignored.
+`SecurityEventLog:Enabled` по умолчанию равен `false`. При включении ScanRun Windows collector читает только Security events 4625 (ошибка входа), 4771 (ошибка предварительной аутентификации Kerberos), 4776 (ошибка проверки credentials) и 4740 (блокировка учётной записи) с `SecurityEventLog:Server` или, если он пуст, с `ActiveDirectory:Server`. Событие 4740 сохраняется как контекст; эвристики учитывают только неудачные попытки аутентификации. Временное окно `LookbackMinutes` по умолчанию равно 60 минутам, ограничение `MaximumEvents` — 10 000. Нормализуются только метаданные, пароли и хеши не читаются. Повторные Record ID отбрасываются.
 
-The **Possible Password Spray** heuristic requires at least 10 failures involving at least 5 distinct usernames from one source IP or workstation within 10 minutes. **Possible Brute Force** requires at least 10 failures against one case-insensitive username within 10 minutes, regardless of source. All thresholds and windows are configurable. These are indicators for investigation, not proof of attack or compromise; distributed sources, duplicate event types and incomplete audit coverage can cause misses or false positives. No automatic account changes are made.
+Эвристика **Possible Password Spray** требует не менее 10 ошибок для не менее 5 разных имён с одного IP или workstation за 10 минут. **Possible Brute Force** требует не менее 10 ошибок для одного имени без учёта регистра за 10 минут; источник может меняться. Все пороги и окна настраиваются. Это признаки для расследования, а не доказательство атаки или компрометации; распределённые источники, дубли событий и неполный аудит могут привести к ложным срабатываниям или пропускам. Автоматических действий с аккаунтами нет.
 
-Mapped scan principals receive object findings `IRA-AUTH-001` (High, 30 points) and `IRA-AUTH-002` (High, 25 points). Unknown or ambiguous usernames receive no object finding; the collector does not make LDAP lookups for them. Authentication findings enter object scoring before the snapshot is saved, so saved findings and scores remain consistent. Enabling the feature when the Security log is unavailable, including on a non-Windows host, marks an otherwise successful scan `CompletedWithErrors` and increments `ErrorsCount`. Skipped malformed records and truncated event windows are also counted. With the feature disabled, the collector is not called.
+Для найденных principals создаются object findings `IRA-AUTH-001` (High, 30 баллов) и `IRA-AUTH-002` (High, 25 баллов). Неизвестное или неоднозначное имя не создаёт finding; LDAP-поиск для событий не выполняется. Authentication findings добавляются до расчёта и сохранения снимка, поэтому сохранённые findings согласованы с оценкой. Если включённая функция не может прочитать журнал, в том числе на не-Windows системе, основной scan продолжается со статусом `CompletedWithErrors` и увеличенным `ErrorsCount`. Некорректные пропущенные события и усечённое окно также учитываются. При выключенной функции collector не вызывается.
 
-The scanner may need membership in the DC's **Event Log Readers** group, the DC's remote Event Log access policy and firewall access. In the isolated `adlab.test` lab only, run `scripts/adlab/11-Configure-EventLogReader.ps1 -ConfirmOptionalEventLogAccess` in an elevated PowerShell session on DC01. This script checks the expected single-DC lab and scanner account, then adds the scanner to the group once. It does not grant Domain Admin rights. A fresh scanner logon token may be required. To test safely, use a small fixed set of lab accounts and a few controlled failed logons; do not run generic credential spraying tools. Real DC event collection and attack simulations were not performed in this development environment.
+Для чтения Security Event Log scanner может потребоваться членство в **Event Log Readers** на DC, политика удалённого чтения журнала и доступ через firewall. Только в изолированной лаборатории `adlab.test` запустите `scripts/adlab/11-Configure-EventLogReader.ps1 -ConfirmOptionalEventLogAccess` в повышенной PowerShell-сессии на DC01. Скрипт проверяет ожидаемую одноузловую лабораторию и scanner, затем добавляет scanner в группу; права Domain Admin не выдаются. Может потребоваться новый сеанс scanner. Проверяйте работу на небольшом закреплённом наборе lab-аккаунтов и нескольких контролируемых неудачных входах; не запускайте универсальные инструменты перебора credentials. В этой среде чтение журнала реального DC и моделирование атак не выполнялись.
 
-## Optional Exchange delegation inventory
+## Необязательный инвентарь Exchange delegation
 
-`ExchangeDelegation:Enabled` is `false` by default. The read-only inventory contract and model distinguish **FullAccess**, **SendAs** and **SendOnBehalf** mailbox delegation from Kerberos delegation. No Exchange connection or mailbox permission reader is configured in this deployment; enabling the flag reports the integration as unavailable and records a recoverable scan error. It never produces fabricated mailbox permissions. A supported Exchange session, read-only collector, persistence and operational verification would be needed before this inventory can be used. No Exchange Risk Rule is assigned. Exchange integration was not tested against a real Exchange environment.
+`ExchangeDelegation:Enabled` по умолчанию равен `false`. Контракт инвентаризации только для чтения и модель различают почтовые разрешения **FullAccess**, **SendAs**, **SendOnBehalf** и Kerberos delegation. В текущей поставке нет подключения к Exchange и сборщика прав mailbox. При включении интеграция сообщает о недоступности и добавляет recoverable error; фиктивные данные не создаются. Для эксплуатации потребуются проверенное подключение к Exchange, read-only collector, сохранение данных и проверка. Правила риска Exchange не добавлены. С настоящим Exchange интеграция не проверялась.
