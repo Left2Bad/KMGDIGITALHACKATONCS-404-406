@@ -1,0 +1,71 @@
+@model IdentityRiskAnalyzer.Web.ViewModels.AdGroupListViewModel
+@{
+    ViewData["Title"] = "Active Directory groups";
+}
+
+<h1>Active Directory groups</h1>
+<p class="text-muted">Directory data is read from Active Directory and kept in memory for this request. Only direct members are listed.</p>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+}
+else if (Model.IncompleteMemberLists > 0)
+{
+    <div class="alert alert-warning" role="status">
+        Member retrieval was incomplete for @Model.IncompleteMemberLists group(s). Counts for those groups may be partial.
+    </div>
+}
+
+@if (Model.ErrorMessage is null && Model.TotalCount == 0)
+{
+    <div class="alert alert-info" role="status">No group entries were returned.</div>
+}
+else if (Model.ErrorMessage is null)
+{
+    <p>
+        Showing @Model.Groups.Count of @Model.TotalCount groups.
+        @if (Model.IsLimited)
+        {
+            <span>The display is limited to the first @Model.DisplayLimit results.</span>
+        }
+    </p>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-sm align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Group</th>
+                    <th scope="col">SAM Account Name</th>
+                    <th scope="col">SID</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Direct Members</th>
+                    <th scope="col">Managed By</th>
+                    <th scope="col">Distinguished Name</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var group in Model.Groups)
+                {
+                    <tr>
+                        <td>@group.Name</td>
+                        <td>@group.SamAccountName</td>
+                        <td>@group.Sid</td>
+                        <td>@group.GroupTypeDisplay</td>
+                        <td>
+                            @group.MembersCount
+                            @if (!group.MembersComplete)
+                            {
+                                <span class="badge text-bg-warning">Partial</span>
+                            }
+                        </td>
+                        <td>@group.ManagedBy</td>
+                        <td class="text-break">@group.DistinguishedName</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<p><a asp-action="Index">Back to Active Directory settings</a></p>

@@ -1,0 +1,77 @@
+@model IdentityRiskAnalyzer.Web.ViewModels.AdUserListViewModel
+@{
+    ViewData["Title"] = "Active Directory users";
+}
+
+<h1>Active Directory users</h1>
+<p class="text-muted">Directory data is read from Active Directory and kept in memory for this request.</p>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+}
+else if (Model.TotalCount == 0)
+{
+    <div class="alert alert-info" role="status">No user entries were returned.</div>
+}
+else
+{
+    <p>
+        Showing @Model.Users.Count of @Model.TotalCount users.
+        @if (Model.IsLimited)
+        {
+            <span>The display is limited to the first @Model.DisplayLimit results.</span>
+        }
+    </p>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-sm align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">SAM Account</th>
+                    <th scope="col">Display Name</th>
+                    <th scope="col">UPN</th>
+                    <th scope="col">Last Known Activity (UTC)</th>
+                    <th scope="col">Password Last Set (UTC)</th>
+                    <th scope="col">SPN Count</th>
+                    <th scope="col">Service Account</th>
+                    <th scope="col">Privileged</th>
+                    <th scope="col">Distinguished Name</th>
+                    <th scope="col">Group Paths</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in Model.Users)
+                {
+                    <tr>
+                        <td>@user.SamAccountName</td>
+                        <td>@user.DisplayName</td>
+                        <td>@user.UserPrincipalName</td>
+                        <td>@(user.LastKnownActivityUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "—")</td>
+                        <td>@(user.PasswordLastSetUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "—")</td>
+                        <td>@user.SpnCount</td>
+                        <td>
+                            <span class="badge @user.ServiceAccountClassification.BadgeCssClass">@user.ServiceAccountClassification.Status</span>
+                            @if (user.ServiceAccountClassification.DetectionMethod != "None")
+                            {
+                                <small class="d-block">@user.ServiceAccountClassification.DetectionMethod</small>
+                            }
+                        </td>
+                        <td>
+                            @if (user.IsPrivileged)
+                            {
+                                <span class="badge text-bg-warning">Yes (@user.PrivilegedGroupCount)</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">No</span>
+                            }
+                        </td>
+                        <td class="text-break">@user.DistinguishedName</td>
+                        <td><a asp-controller="ActiveDirectory" asp-action="UserGroups" asp-route-objectGuid="@user.ObjectGuid">View memberships</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

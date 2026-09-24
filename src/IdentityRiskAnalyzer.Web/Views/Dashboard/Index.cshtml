@@ -1,0 +1,258 @@
+@using IdentityRiskAnalyzer.Web.Domain.Enums
+@model IdentityRiskAnalyzer.Web.ViewModels.DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    string SeverityClass(RiskSeverity severity) => severity switch
+    {
+        RiskSeverity.Critical => "text-bg-danger",
+        RiskSeverity.High => "text-bg-warning",
+        RiskSeverity.Medium => "text-bg-info",
+        _ => "text-bg-secondary"
+    };
+}
+<link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h1 class="mb-1">Identity Risk Dashboard</h1>
+        @if (Model.HasData)
+        {
+            <p class="text-muted mb-0">Based on <a asp-controller="Scans" asp-action="Details" asp-route-id="@Model.ScanRunId">Scan #@Model.ScanRunId</a> · @Model.ScanStartedAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'")</p>
+        }
+        else
+        {
+            <p class="text-muted mb-0">Read-only view of saved Active Directory scan results.</p>
+        }
+    </div>
+    @if (Model.ScanRunning)
+    {
+        <span class="badge text-bg-info fs-6">Active Directory scan is currently running</span>
+    }
+    else
+    {
+        <form asp-controller="Scans" asp-action="Start" method="post" class="m-0">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-primary">@(Model.HasData ? "Run New Scan" : "Start Scan")</button>
+        </form>
+    }
+</div>
+
+@if (Model.LatestFailedScan is { } failure)
+{
+    <div class="alert alert-danger" role="alert">
+        <strong>Latest scan attempt failed</strong> at @failure.StartedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'").
+        @if (!string.IsNullOrWhiteSpace(failure.ErrorMessage))
+        {
+            <span>@failure.ErrorMessage</span>
+        }
+        <a class="alert-link" asp-controller="Scans" asp-action="Details" asp-route-id="@failure.ScanRunId">View failed scan #@failure.ScanRunId</a>
+    </div>
+}
+
+@if (!Model.HasData)
+{
+    <div class="card shadow-sm dashboard-empty">
+        <div class="card-body text-center py-5">
+            <h2 class="h4">No completed Active Directory scans yet</h2>
+            <p class="text-muted mb-0">Run an Active Directory scan to populate the dashboard. Failed scans do not produce a security snapshot.</p>
+        </div>
+    </div>
+}
+else
+{
+    @if (Model.ScanStatus == ScanStatus.CompletedWithErrors)
+    {
+        <div class="alert alert-warning" role="alert">
+            Scan completed with @Model.ErrorsCount recoverable error(s).
+            <a class="alert-link" asp-controller="Scans" asp-action="Details" asp-route-id="@Model.ScanRunId">View scan details</a>
+        </div>
+    }
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-5">
+            <div class="card shadow-sm h-100 dashboard-score-card">
+                <div class="card-body">
+                    <h2 class="h5 text-uppercase text-muted">AD Security Score</h2>
+                    @if (Model.AdSecurityScore.HasValue)
+                    {
+                        <div class="dashboard-score-value">@Model.AdSecurityScore <span>/ 100</span></div>
+                        <div class="progress mt-3" role="progressbar" aria-label="AD Security Score" aria-valuenow="@Model.AdSecurityScore" aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar bg-primary" style="width: @(Math.Clamp(Model.AdSecurityScore.Value, 0, 100))%"></div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="dashboard-score-value">No data</div>
+                    }
+                    <p class="small text-muted mt-3 mb-0">100 means lower average detected risk; 0 means higher average detected risk. Account Risk Score runs in the opposite direction.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h2 class="h5">Latest Completed Scan</h2>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Started</dt><dd class="col-sm-7">@Model.ScanStartedAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'")</dd>
+                        <dt class="col-sm-5">Finished</dt><dd class="col-sm-7">@(Model.ScanFinishedAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "—")</dd>
+                        <dt class="col-sm-5">Duration</dt><dd class="col-sm-7">@(Model.ScanDuration?.ToString(@"hh\:mm\:ss") ?? "—")</dd>
+                        <dt class="col-sm-5">Status</dt><dd class="col-sm-7">@Model.ScanStatus</dd>
+                        <dt class="col-sm-5">Server</dt><dd class="col-sm-7">@Model.Server</dd>
+                        <dt class="col-sm-5">Base DN</dt><dd class="col-sm-7">@Model.BaseDn</dd>
+                        <dt class="col-sm-5">Analysed accounts</dt><dd class="col-sm-7">@Model.TotalObjects</dd>
+                        <dt class="col-sm-5">Findings / Errors</dt><dd class="col-sm-7">@Model.TotalFindings / @Model.ErrorsCount</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="h4">Findings by Severity</h2>
+    <div class="row row-cols-2 row-cols-lg-4 g-3 mb-4">
+        <div class="col"><div class="card border-danger h-100"><div class="card-body"><div class="text-muted">Critical Findings</div><div class="dashboard-metric">@Model.CriticalFindings</div></div></div></div>
+        <div class="col"><div class="card border-warning h-100"><div class="card-body"><div class="text-muted">High Findings</div><div class="dashboard-metric">@Model.HighFindings</div></div></div></div>
+        <div class="col"><div class="card border-info h-100"><div class="card-body"><div class="text-muted">Medium Findings</div><div class="dashboard-metric">@Model.MediumFindings</div></div></div></div>
+        <div class="col"><div class="card border-secondary h-100"><div class="card-body"><div class="text-muted">Low Findings</div><div class="dashboard-metric">@Model.LowFindings</div></div></div></div>
+    </div>
+
+    <h2 class="h4">Account Summary</h2>
+    <div class="row row-cols-2 row-cols-lg-4 g-3 mb-4">
+        <div class="col"><div class="card h-100"><div class="card-body"><div class="text-muted">Analysed Accounts</div><div class="dashboard-metric">@Model.TotalObjects</div></div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body"><div class="text-muted">Service Accounts</div><div class="dashboard-metric">@Model.ServiceAccounts</div></div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body"><div class="text-muted">Privileged Accounts</div><div class="dashboard-metric">@Model.PrivilegedAccounts</div></div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body"><div class="text-muted">Stale Accounts</div><div class="dashboard-metric">@Model.StaleAccounts</div></div></div></div>
+    </div>
+
+    <section class="card shadow-sm mb-4" aria-labelledby="object-level-heading">
+        <div class="card-body">
+            <h2 id="object-level-heading" class="h4">Accounts by Risk Level</h2>
+            <div class="row row-cols-2 row-cols-lg-4 g-3">
+                <div class="col"><strong>Critical</strong><div class="dashboard-metric">@Model.CriticalObjects</div></div>
+                <div class="col"><strong>High</strong><div class="dashboard-metric">@Model.HighObjects</div></div>
+                <div class="col"><strong>Medium</strong><div class="dashboard-metric">@Model.MediumObjects</div></div>
+                <div class="col"><strong>Low</strong><div class="dashboard-metric">@Model.LowObjects</div></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card shadow-sm mb-4" aria-labelledby="top-risk-heading">
+        <div class="card-body">
+            <h2 id="top-risk-heading" class="h4">Top Risky Accounts</h2>
+            <div class="table-responsive"><table class="table table-striped table-sm align-middle mb-0">
+                <thead><tr><th>Account</th><th>Account Risk Score</th><th>Risk Level</th><th>Findings</th><th>Privileged</th><th>Service Account</th></tr></thead>
+                <tbody>
+                @foreach (var account in Model.TopRiskyAccounts)
+                {
+                    <tr>
+                        <td><a asp-controller="Scans" asp-action="Details" asp-route-id="@Model.ScanRunId">@account.AccountName</a></td>
+                        <td>@account.RiskScore / 100</td>
+                        <td><span class="badge @SeverityClass(account.RiskLevel)">@account.RiskLevel</span></td>
+                        <td>@account.FindingsCount</td><td>@(account.IsPrivileged ? "Yes" : "No")</td><td>@(account.IsServiceAccount ? "Yes" : "No")</td>
+                    </tr>
+                }
+                </tbody>
+            </table></div>
+        </div>
+    </section>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-5">
+            <section class="card shadow-sm h-100" aria-labelledby="categories-heading"><div class="card-body">
+                <h2 id="categories-heading" class="h4">Risk Categories</h2>
+                <div class="table-responsive"><table class="table table-sm mb-0">
+                    <thead><tr><th>Category</th><th>Findings</th><th>Affected Accounts</th></tr></thead>
+                    <tbody>
+                    @foreach (var category in Model.RiskCategories)
+                    {
+                        <tr><td>@category.Category</td><td>@category.FindingsCount</td><td>@category.AffectedAccounts</td></tr>
+                    }
+                    </tbody>
+                </table></div>
+            </div></section>
+        </div>
+        <div class="col-lg-7">
+            <section class="card shadow-sm h-100" aria-labelledby="history-heading"><div class="card-body">
+                <h2 id="history-heading" class="h4">AD Security Score History</h2>
+                <p class="small text-muted">Last @Model.ScoreHistory.Count completed scans · fixed scale 0–100 · oldest to newest</p>
+                @if (Model.ScoreHistory.Count < 2)
+                {
+                    <p class="text-muted">More scans are required to show a trend.</p>
+                }
+                <div class="dashboard-chart" role="img" aria-label="AD Security Score history from 0 to 100">
+                    <div class="dashboard-chart-axis"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div>
+                    <div class="dashboard-chart-bars">
+                        @foreach (var point in Model.ScoreHistory)
+                        {
+                            <div class="dashboard-chart-item">
+                                <div class="dashboard-chart-track">
+                                    @if (point.AdSecurityScore is int value)
+                                    {
+                                        <div class="dashboard-chart-bar" style="height: @(Math.Clamp(value, 0, 100))%" title="Scan #@point.ScanRunId: @value / 100"></div>
+                                    }
+                                    else
+                                    {
+                                        <span class="dashboard-chart-no-data">No data</span>
+                                    }
+                                </div>
+                                <span class="dashboard-chart-label">#@point.ScanRunId<br />@point.StartedAtUtc.ToString("MM-dd HH:mm")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="table-responsive mt-3"><table class="table table-sm mb-0">
+                    <thead><tr><th>Scan</th><th>Started (UTC)</th><th>AD Security Score</th></tr></thead>
+                    <tbody>
+                    @foreach (var point in Model.ScoreHistory)
+                    {
+                        <tr><td><a asp-controller="Scans" asp-action="Details" asp-route-id="@point.ScanRunId">#@point.ScanRunId</a></td><td>@point.StartedAtUtc.ToString("yyyy-MM-dd HH:mm")</td><td>@(point.AdSecurityScore?.ToString() ?? "No data")</td></tr>
+                    }
+                    </tbody>
+                </table></div>
+            </div></section>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <section class="card shadow-sm h-100" aria-labelledby="privileged-heading"><div class="card-body">
+                <h2 id="privileged-heading" class="h4">High-Risk Privileged Accounts</h2>
+                <div class="table-responsive"><table class="table table-sm mb-0">
+                    <thead><tr><th>Account</th><th>Account Risk Score</th><th>Risk Level</th><th>Findings</th></tr></thead>
+                    <tbody>
+                    @foreach (var account in Model.HighRiskPrivilegedAccounts)
+                    {
+                        <tr><td><a asp-controller="Scans" asp-action="Details" asp-route-id="@Model.ScanRunId">@account.AccountName</a></td><td>@account.RiskScore</td><td><span class="badge @SeverityClass(account.RiskLevel)">@account.RiskLevel</span></td><td>@account.FindingsCount</td></tr>
+                    }
+                    </tbody>
+                </table></div>
+            </div></section>
+        </div>
+        <div class="col-lg-6">
+            <section class="card shadow-sm h-100" aria-labelledby="service-heading"><div class="card-body">
+                <h2 id="service-heading" class="h4">Risky Service Accounts</h2>
+                <div class="table-responsive"><table class="table table-sm mb-0">
+                    <thead><tr><th>Account</th><th>Account Risk Score</th><th>Risk Level</th><th>Findings</th></tr></thead>
+                    <tbody>
+                    @foreach (var account in Model.RiskyServiceAccounts)
+                    {
+                        <tr><td><a asp-controller="Scans" asp-action="Details" asp-route-id="@Model.ScanRunId">@account.AccountName</a></td><td>@account.RiskScore</td><td><span class="badge @SeverityClass(account.RiskLevel)">@account.RiskLevel</span></td><td>@account.FindingsCount</td></tr>
+                    }
+                    </tbody>
+                </table></div>
+            </div></section>
+        </div>
+    </div>
+
+    <section class="card shadow-sm mb-4" aria-labelledby="findings-heading"><div class="card-body">
+        <h2 id="findings-heading" class="h4">Most Important Findings</h2>
+        <div class="table-responsive"><table class="table table-striped table-sm mb-0">
+            <thead><tr><th>Severity</th><th>Account</th><th>Rule ID</th><th>Title</th><th>Points</th></tr></thead>
+            <tbody>
+            @foreach (var finding in Model.MostImportantFindings)
+            {
+                <tr><td><span class="badge @SeverityClass(finding.Severity)">@finding.Severity</span></td><td>@finding.ObjectName</td><td>@finding.RuleId</td><td>@finding.Title</td><td>@finding.RiskPoints</td></tr>
+            }
+            </tbody>
+        </table></div>
+    </div></section>
+}

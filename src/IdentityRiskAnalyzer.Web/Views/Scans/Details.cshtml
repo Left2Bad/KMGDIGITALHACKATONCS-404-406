@@ -1,0 +1,57 @@
+@using IdentityRiskAnalyzer.Web.Domain.Enums
+@model IdentityRiskAnalyzer.Web.ViewModels.ScanDetailsViewModel
+@{
+    ViewData["Title"] = $"Scan {Model.Summary.Id}";
+}
+
+<h1>Scan @Model.Summary.Id</h1>
+<p><a asp-controller="Scans" asp-action="Index">Back to scans</a></p>
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+}
+<dl class="row">
+    <dt class="col-sm-3">Status</dt><dd class="col-sm-9">@Model.Summary.Status</dd>
+    <dt class="col-sm-3">Started (UTC)</dt><dd class="col-sm-9">@Model.Summary.StartedAtUtc.ToString("u")</dd>
+    <dt class="col-sm-3">Finished (UTC)</dt><dd class="col-sm-9">@(Model.Summary.FinishedAtUtc?.ToString("u") ?? "—")</dd>
+    <dt class="col-sm-3">Duration</dt><dd class="col-sm-9">@(Model.Summary.Duration?.ToString(@"hh\:mm\:ss") ?? "—")</dd>
+    <dt class="col-sm-3">Server</dt><dd class="col-sm-9">@Model.Summary.Server</dd>
+    <dt class="col-sm-3">Base DN</dt><dd class="col-sm-9">@Model.BaseDn</dd>
+    <dt class="col-sm-3">Objects scanned</dt><dd class="col-sm-9">@Model.Summary.ObjectsScanned</dd>
+    <dt class="col-sm-3">Findings</dt><dd class="col-sm-9">@Model.Summary.FindingsCount</dd>
+    <dt class="col-sm-3">Errors</dt><dd class="col-sm-9">@Model.Summary.ErrorsCount</dd>
+    <dt class="col-sm-3">AD Security Score</dt><dd class="col-sm-9">@(Model.Summary.AdSecurityScore?.ToString() ?? "—")</dd>
+</dl>
+
+<h2 class="h4 mt-4">Severity summary</h2>
+<div class="table-responsive"><table class="table table-sm">
+    <thead><tr><th>Severity</th><th>Findings</th><th>Objects</th></tr></thead>
+    <tbody>
+    @foreach (var severity in Enum.GetValues<RiskSeverity>().Reverse())
+    {
+        <tr><td>@severity</td><td>@Model.FindingSeverityCounts.GetValueOrDefault(severity)</td><td>@Model.ObjectRiskCounts.GetValueOrDefault(severity)</td></tr>
+    }
+    </tbody>
+</table></div>
+
+<h2 class="h4 mt-4">Top risky accounts</h2>
+<div class="table-responsive"><table class="table table-sm">
+    <thead><tr><th>Object</th><th>Risk score</th><th>Risk level</th><th>Findings</th></tr></thead>
+    <tbody>
+    @foreach (var account in Model.TopRiskyAccounts)
+    {
+        <tr><td>@account.Name</td><td>@account.RiskScore</td><td>@account.RiskLevel</td><td>@account.FindingsCount</td></tr>
+    }
+    </tbody>
+</table></div>
+
+<h2 class="h4 mt-4">Recent findings</h2>
+<div class="table-responsive"><table class="table table-sm">
+    <thead><tr><th>Object</th><th>Rule ID</th><th>Severity</th><th>Title</th></tr></thead>
+    <tbody>
+    @foreach (var finding in Model.Findings)
+    {
+        <tr><td>@finding.ObjectName</td><td>@finding.RuleId</td><td>@finding.Severity</td><td>@finding.Title</td></tr>
+    }
+    </tbody>
+</table></div>

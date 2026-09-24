@@ -1,0 +1,235 @@
+@model IdentityRiskAnalyzer.Web.ViewModels.UserGroupMembershipViewModel
+@{
+    ViewData["Title"] = "User group memberships";
+}
+
+<h1>Group memberships for @Model.UserName</h1>
+@if (!string.IsNullOrWhiteSpace(Model.DistinguishedName))
+{
+    <p class="text-muted text-break">@Model.DistinguishedName</p>
+}
+
+@if (Model.ErrorMessage is null)
+{
+    <section class="card mb-4" aria-labelledby="service-account-classification-heading">
+        <div class="card-body">
+            <h2 id="service-account-classification-heading" class="h4">Service Account Classification</h2>
+            <p>
+                Service Account:
+                <span class="badge @Model.ServiceAccountClassification.BadgeCssClass">@Model.ServiceAccountClassification.Status</span>
+            </p>
+            <p><strong>Detection:</strong> @Model.ServiceAccountClassification.DetectionMethod</p>
+            <p><strong>Confidence:</strong> @Model.ServiceAccountClassification.Confidence</p>
+            <h3 class="h6">Evidence</h3>
+            @if (Model.ServiceAccountClassification.Evidence.Count == 0)
+            {
+                <p class="text-muted">No service-account indicators were found.</p>
+            }
+            else
+            {
+                <ul>
+                    @foreach (var evidence in Model.ServiceAccountClassification.Evidence)
+                    {
+                        <li>@evidence</li>
+                    }
+                </ul>
+            }
+            @if (Model.ServiceAccountClassification.ServicePrincipalNames.Count > 0)
+            {
+                <h3 class="h6">Service Principal Names</h3>
+                <ul>
+                    @foreach (var servicePrincipalName in Model.ServiceAccountClassification.ServicePrincipalNames)
+                    {
+                        <li class="text-break">@servicePrincipalName</li>
+                    }
+                </ul>
+            }
+            <p class="text-muted mb-0"><strong>Interactive logon policy:</strong> @Model.ServiceAccountClassification.InteractiveLogonPolicyStatus</p>
+        </div>
+    </section>
+
+    <p>
+        Privileged:
+        @if (Model.IsPrivileged)
+        {
+            <span class="badge text-bg-warning">Yes</span>
+        }
+        else
+        {
+            <span class="badge text-bg-secondary">No</span>
+        }
+    </p>
+}
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+}
+else if (Model.Memberships.Count == 0)
+{
+    <div class="alert alert-info" role="status">No direct or nested group memberships were found.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Target Group</th>
+                    <th scope="col">Membership</th>
+                    <th scope="col">Depth</th>
+                    <th scope="col">Path</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var membership in Model.Memberships)
+                {
+                    <tr>
+                        <td>@membership.TargetGroupName</td>
+                        <td>@(membership.IsDirect ? "Direct" : "Nested")</td>
+                        <td>@membership.Depth</td>
+                        <td class="text-break">@membership.Path</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (Model.ErrorMessage is null)
+{
+    <section class="mt-4" aria-labelledby="privileged-memberships-heading">
+        <h2 id="privileged-memberships-heading">Privileged memberships</h2>
+        @if (Model.PrivilegedMemberships.Count == 0)
+        {
+            <p class="text-muted">No privileged group paths were found.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">Target privileged group</th>
+                            <th scope="col">Membership</th>
+                            <th scope="col">Depth</th>
+                            <th scope="col">Match</th>
+                            <th scope="col">Full path</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var membership in Model.PrivilegedMemberships)
+                        {
+                            <tr>
+                                <td>
+                                    @membership.GroupName
+                                    @if (!string.IsNullOrWhiteSpace(membership.GroupSid))
+                                    {
+                                        <small class="d-block text-muted">@membership.GroupSid</small>
+                                    }
+                                </td>
+                                <td>@(membership.IsDirect ? "Direct" : "Nested")</td>
+                                <td>@membership.Depth</td>
+                                <td>@membership.MatchMethod</td>
+                                <td class="text-break">@membership.Path</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@if (Model.ErrorMessage is null)
+{
+    <section class="mt-4" aria-labelledby="kerberos-delegation-heading">
+        <h2 id="kerberos-delegation-heading">Kerberos Delegation</h2>
+        @if (Model.Delegations.Count == 0)
+        {
+            <p class="text-muted">No Kerberos delegation detected.</p>
+        }
+        else
+        {
+            @foreach (var delegation in Model.Delegations)
+            {
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h3 class="h5">@delegation.Type</h3>
+                        @if (delegation.Targets.Count == 0)
+                        {
+                            <p><strong>Targets:</strong> Not applicable</p>
+                        }
+                        else
+                        {
+                            <p class="mb-1"><strong>Targets:</strong></p>
+                            <ul>
+                                @foreach (var target in delegation.Targets)
+                                {
+                                    <li class="text-break">@target</li>
+                                }
+                            </ul>
+                        }
+                        <p><strong>Evidence:</strong></p>
+                        <pre class="text-break mb-2">@delegation.Evidence</pre>
+                        @if (delegation.RequiresDetailedReview)
+                        {
+                            <div class="alert alert-warning mb-0" role="status">
+                                Requires detailed review. RBCD security descriptor ACLs are not evaluated in this MVP.
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </section>
+}
+
+@if (Model.ErrorMessage is null)
+{
+    <section class="mt-4" aria-labelledby="detected-risks-heading">
+        <h2 id="detected-risks-heading">Detected Risks</h2>
+        <div class="card mb-3">
+            <div class="card-body d-flex flex-wrap align-items-center gap-3">
+                <div>
+                    <span class="text-muted">Risk Score</span>
+                    <strong class="fs-4 ms-2">@Model.RiskScore.Score/100</strong>
+                </div>
+                <div>
+                    <span class="text-muted">Risk Level</span>
+                    <span class="badge @Model.RiskScore.RiskLevelCssClass ms-2">@Model.RiskScore.RiskLevel</span>
+                </div>
+                <div><span class="text-muted">Findings:</span> @Model.RiskScore.FindingsCount</div>
+            </div>
+        </div>
+        @if (Model.RiskScore.RawScore > 100)
+        {
+            <p class="text-muted">Raw accumulated points: @Model.RiskScore.RawScore. Final score is capped at 100.</p>
+        }
+        @if (Model.RiskFindings.Count == 0)
+        {
+            <p class="text-muted">No risks detected by the currently implemented rules.</p>
+        }
+        else
+        {
+            @foreach (var finding in Model.RiskFindings)
+            {
+                <article class="card mb-3">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap justify-content-between gap-2">
+                            <h3 class="h5">@finding.Title</h3>
+                            <span class="badge @finding.SeverityCssClass">@finding.Severity</span>
+                        </div>
+                        <p class="text-muted"><strong>@finding.RuleId</strong> · @finding.RiskPoints points</p>
+                        <p>@finding.Description</p>
+                        <h4 class="h6">Evidence</h4>
+                        <pre class="text-break">@finding.Evidence</pre>
+                        <p class="mb-0"><strong>Recommendation:</strong> @finding.Recommendation</p>
+                    </div>
+                </article>
+            }
+        }
+    </section>
+}
+
+<p><a asp-action="Users">Back to users</a></p>
