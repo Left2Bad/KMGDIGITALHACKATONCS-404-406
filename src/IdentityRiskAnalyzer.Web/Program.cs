@@ -14,6 +14,10 @@ using IdentityRiskAnalyzer.Web.Services.RiskRules.ServiceAccount;
 using IdentityRiskAnalyzer.Web.Services.RiskRules.Spn;
 using IdentityRiskAnalyzer.Web.Services.Scoring;
 using IdentityRiskAnalyzer.Web.Services.Scanning;
+using IdentityRiskAnalyzer.Web.Services.Objects;
+using IdentityRiskAnalyzer.Web.Services.Export;
+using IdentityRiskAnalyzer.Web.Services.SecurityEvents;
+using IdentityRiskAnalyzer.Web.Services.Exchange;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,6 +45,12 @@ builder.Services.AddOptions<RiskSettings>()
     .BindConfiguration(RiskSettings.SectionName)
     .Validate(settings => !settings.Validate(new System.ComponentModel.DataAnnotations.ValidationContext(settings)).Any(), "Risk settings are invalid or incomplete.")
     .ValidateOnStart();
+builder.Services.AddOptions<SecurityEventLogOptions>()
+    .BindConfiguration(SecurityEventLogOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddOptions<ExchangeDelegationOptions>()
+    .BindConfiguration(ExchangeDelegationOptions.SectionName);
 builder.Services.AddScoped<AdUserRecordMapper>();
 builder.Services.AddScoped<AdGroupRecordMapper>();
 builder.Services.AddScoped<GroupGraphService>();
@@ -50,7 +60,12 @@ builder.Services.AddScoped<ServiceAccountClassifier>();
 builder.Services.AddScoped<DuplicateSpnAnalyzer>();
 builder.Services.AddScoped<RiskEngine>();
 builder.Services.AddScoped<RiskScoringService>();
+builder.Services.AddScoped<ISecurityEventLogCollector, WindowsSecurityEventLogCollector>();
+builder.Services.AddScoped<AuthenticationThreatAnalyzer>();
+builder.Services.AddScoped<IExchangeDelegationCollector, UnavailableExchangeDelegationCollector>();
 builder.Services.AddScoped<DashboardQueryService>();
+builder.Services.AddScoped<ObjectDetailsQueryService>();
+builder.Services.AddScoped<CsvExportService>();
 builder.Services.AddSingleton<ScanConcurrencyGate>();
 builder.Services.AddScoped<IActiveDirectoryScanService, ActiveDirectoryScanService>();
 builder.Services.AddSingleton(TimeProvider.System);

@@ -10,6 +10,8 @@ using IdentityRiskAnalyzer.Web.Services.GroupAnalysis;
 using IdentityRiskAnalyzer.Web.Services.RiskRules;
 using IdentityRiskAnalyzer.Web.Services.Scanning;
 using IdentityRiskAnalyzer.Web.Services.Scoring;
+using IdentityRiskAnalyzer.Web.Services.SecurityEvents;
+using IdentityRiskAnalyzer.Web.Services.Exchange;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,8 +21,81 @@ using IdentityRiskAnalyzer.Web.ViewModels;
 
 namespace IdentityRiskAnalyzer.Tests;
 
+internal sealed class FakeEventCollector : ISecurityEventLogCollector
+{
+    public SecurityEventCollectionResult Result { get; set; } = new() { Status = SecurityEventCollectionStatus.Disabled };
+    public int Calls { get; private set; }
+    public SecurityEventCollectionResult Collect(CancellationToken cancellationToken) =>
+        CollectCore(cancellationToken);
+    private SecurityEventCollectionResult CollectCore(CancellationToken token)
+    { Calls++; token.ThrowIfCancellationRequested(); return Result; }
+}
+
 public sealed class ActiveDirectoryScanServiceTests
 {
+    [Fact]
+    public async Task DisabledEventFeatureDoesNotCallCollector()
+    {
+        await using var harness = await Harness.CreateAsync();
+        harness.Ldap.Users = [User("alice")];
+        var result = await harness.RunAsync([]);
+        Assert.Equal(ScanStatus.Completed, result.Status);
+        Assert.Equal(0, harness.Events.Calls);
+    }
+
+    [Fact]
+    public async Task OptionalEventFailureKeepsDirectorySnapshotAndMarksErrors()
+    {
+        await using var harness = await Harness.CreateAsync();
+        harness.Ldap.Users = [User("alice")];
+        harness.EventOptions.Enabled = true;
+        harness.Events.Result = new() { Status = SecurityEventCollectionStatus.Unavailable,
+            ErrorMessage = "Security Event Log is unavailable." };
+        var result = await harness.RunAsync([]);
+        Assert.Equal(ScanStatus.CompletedWithErrors, result.Status);
+        Assert.Equal(1, result.ErrorsCount);
+        Assert.Equal(1, await harness.Db.AdObjectSnapshots.CountAsync());
+        Assert.Equal(1, harness.Events.Calls);
+    }
+
+    [Fact]
+    public async Task EnabledUnavailableExchangeInventoryIsRecoverable()
+    {
+        await using var harness = await Harness.CreateAsync();
+        harness.Ldap.Users = [User("alice")];
+        harness.ExchangeOptions.Enabled = true;
+        var result = await harness.RunAsync([]);
+        Assert.Equal(ScanStatus.CompletedWithErrors, result.Status);
+        Assert.Equal(1, result.ErrorsCount);
+        Assert.Equal(1, await harness.Db.AdObjectSnapshots.CountAsync());
+    }
+
+    [Fact]
+    public async Task EventFindingIsPersistedAndIncludedInObjectScore()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var user = User("alice");
+        harness.Ldap.Users = [user];
+        harness.EventOptions.Enabled = true;
+        var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        harness.Events.Result = new()
+        {
+            Status = SecurityEventCollectionStatus.Success,
+            EventsRead = 10,
+            Events = Enumerable.Range(0, 10).Select(index => new SecurityAuthenticationEvent
+            {
+                EventId = 4625, RecordId = index + 1, TimestampUtc = start.AddSeconds(index),
+                TargetUserName = "ALICE", SourceIpAddress = "10.0.0.2"
+            }).ToArray()
+        };
+        var result = await harness.RunAsync([]);
+        Assert.Equal(ScanStatus.Completed, result.Status);
+        Assert.Equal(1, result.FindingsCount);
+        Assert.Equal(75, result.AdSecurityScore);
+        Assert.Equal(25, (await harness.Db.AdObjectSnapshots.SingleAsync()).RiskScore);
+        Assert.Equal(RiskRuleIds.PossibleBruteForce, (await harness.Db.RiskFindings.SingleAsync()).RuleId);
+    }
+
     [Fact]
     public async Task SuccessfulScanPersistsAllSnapshotTypesAndUsesScoredFindings()
     {
@@ -297,6 +372,9 @@ public sealed class ActiveDirectoryScanServiceTests
         private readonly ScanConcurrencyGate _gate = new();
         public AppDbContext Db { get; }
         public FakeLdap Ldap { get; } = new();
+        public FakeEventCollector Events { get; } = new();
+        public SecurityEventLogOptions EventOptions { get; } = new();
+        public ExchangeDelegationOptions ExchangeOptions { get; } = new();
         public ScanConcurrencyGate Gate => _gate;
 
         private Harness(SqliteConnection connection, AppDbContext db)
@@ -324,6 +402,9 @@ public sealed class ActiveDirectoryScanServiceTests
                 new DelegationAnalyzer(NullLogger<DelegationAnalyzer>.Instance), new DuplicateSpnAnalyzer(),
                 new RiskEngine(rules, NullLogger<RiskEngine>.Instance),
                 new RiskScoringService(riskOptions, NullLogger<RiskScoringService>.Instance),
+                Events, new AuthenticationThreatAnalyzer(Options.Create(EventOptions)),
+                Options.Create(EventOptions),
+                new UnavailableExchangeDelegationCollector(Options.Create(ExchangeOptions)),
                 adOptions, riskOptions, TimeProvider.System, _gate, NullLogger<ActiveDirectoryScanService>.Instance);
             return service.RunScanAsync(token);
         }

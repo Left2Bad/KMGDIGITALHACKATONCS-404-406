@@ -131,10 +131,12 @@ public sealed class ObjectDetailsQueryService(AppDbContext db, ILogger<ObjectDet
     }
 
     private (IReadOnlyList<string> Values, bool Valid) TryReadStringArray(
-        string json, long scanId, Guid objectGuid, long recordId, string field)
+        string? json, long scanId, Guid objectGuid, long recordId, string field)
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(json))
+                throw new JsonException("JSON value is missing.");
             using var document = JsonDocument.Parse(json);
             if (document.RootElement.ValueKind != JsonValueKind.Array)
                 throw new JsonException("Expected a JSON array.");

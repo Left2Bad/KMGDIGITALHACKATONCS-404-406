@@ -18,6 +18,8 @@ public static class RiskRuleIds
     public const string ResourceBasedConstrainedDelegation = "IRA-DELEGATION-004";
     public const string SidHistoryPresent = "IRA-AD-001";
     public const string DuplicateSpn = "IRA-SPN-001";
+    public const string PossiblePasswordSpray = "IRA-AUTH-001";
+    public const string PossibleBruteForce = "IRA-AUTH-002";
 
     public static IReadOnlyList<string> All { get; } =
     [
@@ -36,6 +38,8 @@ public static class RiskRuleIds
         ProtocolTransition,
         ResourceBasedConstrainedDelegation,
         SidHistoryPresent,
-        DuplicateSpn
+        DuplicateSpn,
+        PossiblePasswordSpray,
+        PossibleBruteForce
     ];
 }

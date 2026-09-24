@@ -24,6 +24,7 @@ public sealed class TopRiskyAccountViewModel
 
 public sealed class ScanFindingViewModel
 {
+    public Guid ObjectGuid { get; init; }
     public string ObjectName { get; init; } = string.Empty;
     public string RuleId { get; init; } = string.Empty;
     public RiskSeverity Severity { get; init; }

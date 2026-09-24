@@ -70,7 +70,8 @@ public sealed class ScansController(AppDbContext db, IActiveDirectoryScanService
         var findingRows = await db.RiskFindings.AsNoTracking().Where(item => item.ScanRunId == id)
             .OrderByDescending(item => item.Severity).ThenBy(item => item.ObjectName)
             .Take(20).Select(item => new ScanFindingViewModel
-            { ObjectName = item.ObjectName, RuleId = item.RuleId, Severity = item.Severity, Title = item.Title })
+            { ObjectGuid = item.ObjectGuid, ObjectName = item.ObjectName,
+                RuleId = item.RuleId, Severity = item.Severity, Title = item.Title })
             .ToListAsync(cancellationToken);
 
         return View(new ScanDetailsViewModel

@@ -112,6 +112,8 @@ public sealed class RiskSettings : IValidatableObject
         [RiskRuleIds.ProtocolTransition] = new() { RiskPoints = 35, Severity = RiskSeverity.High },
         [RiskRuleIds.ResourceBasedConstrainedDelegation] = new() { RiskPoints = 25, Severity = RiskSeverity.High },
         [RiskRuleIds.SidHistoryPresent] = new() { RiskPoints = 15, Severity = RiskSeverity.Medium },
-        [RiskRuleIds.DuplicateSpn] = new() { RiskPoints = 25, Severity = RiskSeverity.High }
+        [RiskRuleIds.DuplicateSpn] = new() { RiskPoints = 25, Severity = RiskSeverity.High },
+        [RiskRuleIds.PossiblePasswordSpray] = new() { RiskPoints = 30, Severity = RiskSeverity.High },
+        [RiskRuleIds.PossibleBruteForce] = new() { RiskPoints = 25, Severity = RiskSeverity.High }
     };
 }

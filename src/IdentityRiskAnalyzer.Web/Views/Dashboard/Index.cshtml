@@ -68,6 +68,11 @@ else
         </div>
     }
 
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <a class="btn btn-outline-primary btn-sm" asp-controller="ScanExports" asp-action="Accounts" asp-route-scanId="@Model.ScanRunId">Export Accounts CSV</a>
+        <a class="btn btn-outline-primary btn-sm" asp-controller="ScanExports" asp-action="Findings" asp-route-scanId="@Model.ScanRunId">Export Findings CSV</a>
+    </div>
+
     <div class="row g-3 mb-4">
         <div class="col-lg-5">
             <div class="card shadow-sm h-100 dashboard-score-card">
@@ -144,7 +149,7 @@ else
                 @foreach (var account in Model.TopRiskyAccounts)
                 {
                     <tr>
-                        <td><a asp-controller="Scans" asp-action="Details" asp-route-id="@Model.ScanRunId">@account.AccountName</a></td>
+                        <td><a asp-controller="ScanObjects" asp-action="Details" asp-route-scanId="@Model.ScanRunId" asp-route-objectGuid="@account.ObjectGuid">@account.AccountName</a></td>
                         <td>@account.RiskScore / 100</td>
                         <td><span class="badge @SeverityClass(account.RiskLevel)">@account.RiskLevel</span></td>
                         <td>@account.FindingsCount</td><td>@(account.IsPrivileged ? "Yes" : "No")</td><td>@(account.IsServiceAccount ? "Yes" : "No")</td>
@@ -221,7 +226,7 @@ else
                     <tbody>
                     @foreach (var account in Model.HighRiskPrivilegedAccounts)
                     {
-                        <tr><td><a asp-controller="Scans" asp-action="Details" asp-route-id="@Model.ScanRunId">@account.AccountName</a></td><td>@account.RiskScore</td><td><span class="badge @SeverityClass(account.RiskLevel)">@account.RiskLevel</span></td><td>@account.FindingsCount</td></tr>
+                        <tr><td><a asp-controller="ScanObjects" asp-action="Details" asp-route-scanId="@Model.ScanRunId" asp-route-objectGuid="@account.ObjectGuid">@account.AccountName</a></td><td>@account.RiskScore</td><td><span class="badge @SeverityClass(account.RiskLevel)">@account.RiskLevel</span></td><td>@account.FindingsCount</td></tr>
                     }
                     </tbody>
                 </table></div>
@@ -235,7 +240,7 @@ else
                     <tbody>
                     @foreach (var account in Model.RiskyServiceAccounts)
                     {
-                        <tr><td><a asp-controller="Scans" asp-action="Details" asp-route-id="@Model.ScanRunId">@account.AccountName</a></td><td>@account.RiskScore</td><td><span class="badge @SeverityClass(account.RiskLevel)">@account.RiskLevel</span></td><td>@account.FindingsCount</td></tr>
+                        <tr><td><a asp-controller="ScanObjects" asp-action="Details" asp-route-scanId="@Model.ScanRunId" asp-route-objectGuid="@account.ObjectGuid">@account.AccountName</a></td><td>@account.RiskScore</td><td><span class="badge @SeverityClass(account.RiskLevel)">@account.RiskLevel</span></td><td>@account.FindingsCount</td></tr>
                     }
                     </tbody>
                 </table></div>
@@ -250,7 +255,7 @@ else
             <tbody>
             @foreach (var finding in Model.MostImportantFindings)
             {
-                <tr><td><span class="badge @SeverityClass(finding.Severity)">@finding.Severity</span></td><td>@finding.ObjectName</td><td>@finding.RuleId</td><td>@finding.Title</td><td>@finding.RiskPoints</td></tr>
+                <tr><td><span class="badge @SeverityClass(finding.Severity)">@finding.Severity</span></td><td><a asp-controller="ScanObjects" asp-action="Details" asp-route-scanId="@Model.ScanRunId" asp-route-objectGuid="@finding.ObjectGuid">@finding.ObjectName</a></td><td>@finding.RuleId</td><td>@finding.Title</td><td>@finding.RiskPoints</td></tr>
             }
             </tbody>
         </table></div>

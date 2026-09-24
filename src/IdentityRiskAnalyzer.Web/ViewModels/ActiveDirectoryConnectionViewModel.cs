@@ -19,7 +19,7 @@ public sealed class ActiveDirectoryConnectionViewModel
         {
             Server = options.Server,
             Port = options.Port,
-            Protocol = options.UseSsl ? "LDAPS" : "LDAP",
+            Protocol = options.UseSsl ? "LDAPS (TLS)" : "LDAP",
             BaseDn = options.BaseDn,
             TimeoutSeconds = options.ConnectTimeoutSeconds,
             CredentialsConfigured = options.CredentialsConfigured,

@@ -6,6 +6,13 @@
 
 <h1>Scan @Model.Summary.Id</h1>
 <p><a asp-controller="Scans" asp-action="Index">Back to scans</a></p>
+@if (Model.Summary.Status is ScanStatus.Completed or ScanStatus.CompletedWithErrors)
+{
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a class="btn btn-outline-primary" asp-controller="ScanExports" asp-action="Accounts" asp-route-scanId="@Model.Summary.Id">Export Accounts CSV</a>
+        <a class="btn btn-outline-primary" asp-controller="ScanExports" asp-action="Findings" asp-route-scanId="@Model.Summary.Id">Export Findings CSV</a>
+    </div>
+}
 @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
 {
     <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
@@ -40,7 +47,7 @@
     <tbody>
     @foreach (var account in Model.TopRiskyAccounts)
     {
-        <tr><td>@account.Name</td><td>@account.RiskScore</td><td>@account.RiskLevel</td><td>@account.FindingsCount</td></tr>
+        <tr><td><a asp-controller="ScanObjects" asp-action="Details" asp-route-scanId="@Model.Summary.Id" asp-route-objectGuid="@account.ObjectGuid">@account.Name</a></td><td>@account.RiskScore</td><td>@account.RiskLevel</td><td>@account.FindingsCount</td></tr>
     }
     </tbody>
 </table></div>
@@ -51,7 +58,7 @@
     <tbody>
     @foreach (var finding in Model.Findings)
     {
-        <tr><td>@finding.ObjectName</td><td>@finding.RuleId</td><td>@finding.Severity</td><td>@finding.Title</td></tr>
+        <tr><td><a asp-controller="ScanObjects" asp-action="Details" asp-route-scanId="@Model.Summary.Id" asp-route-objectGuid="@finding.ObjectGuid">@finding.ObjectName</a></td><td>@finding.RuleId</td><td>@finding.Severity</td><td>@finding.Title</td></tr>
     }
     </tbody>
 </table></div>

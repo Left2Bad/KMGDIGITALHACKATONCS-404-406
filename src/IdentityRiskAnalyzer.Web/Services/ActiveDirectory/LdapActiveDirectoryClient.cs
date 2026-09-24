@@ -86,7 +86,7 @@ public sealed class LdapActiveDirectoryClient(
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                using var connection = CreateConnection();
+                using var connection = CreateConnection(_options);
                 connection.Bind();
 
                 cancellationToken.ThrowIfCancellationRequested();
@@ -109,7 +109,9 @@ public sealed class LdapActiveDirectoryClient(
                 {
                     result = CreateResult(
                         success: true,
-                        "LDAP bind and Base DN query succeeded.",
+                        _options.UseSsl
+                            ? "LDAPS bind and Base DN query succeeded."
+                            : "LDAP bind and Base DN query succeeded.",
                         LdapConnectionErrorType.None);
                 }
             }
@@ -122,12 +124,13 @@ public sealed class LdapActiveDirectoryClient(
                 var errorType = ClassifyError(exception);
                 result = CreateResult(false, GetSafeMessage(errorType), errorType);
                 logger.LogWarning(
-                    exception,
-                    "LDAP connection test failed for {Server}:{Port}; LDAPS={UseSsl}; ErrorType={ErrorType}.",
+                    "LDAP connection test failed for {Server}:{Port}; LDAPS={UseSsl}; ErrorType={ErrorType}; ExceptionType={ExceptionType}; Message={Message}.",
                     _options.Server,
                     _options.Port,
                     _options.UseSsl,
-                    errorType);
+                    errorType,
+                    exception.GetType().Name,
+                    result.Message);
             }
         }
 
@@ -191,7 +194,7 @@ public sealed class LdapActiveDirectoryClient(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            using var connection = CreateConnection();
+            using var connection = CreateConnection(_options);
             connection.Bind();
             pageNumber = ExecutePagedSearch(
                 connection,
@@ -298,7 +301,7 @@ public sealed class LdapActiveDirectoryClient(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            using var connection = CreateConnection();
+            using var connection = CreateConnection(_options);
             connection.Bind();
             pageNumber = ExecutePagedSearch(
                 connection,
@@ -427,7 +430,7 @@ public sealed class LdapActiveDirectoryClient(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            using var connection = CreateConnection();
+            using var connection = CreateConnection(_options);
             connection.Bind();
             pageNumber = ExecutePagedSearch(
                 connection,
@@ -693,20 +696,20 @@ public sealed class LdapActiveDirectoryClient(
         int AdditionalRangesRequested,
         bool UsedRangedRetrieval);
 
-    private LdapConnection CreateConnection()
+    internal static LdapConnection CreateConnection(ActiveDirectoryOptions options)
     {
-        var identifier = new LdapDirectoryIdentifier(_options.Server, _options.Port);
+        var identifier = new LdapDirectoryIdentifier(options.Server, options.Port);
         var connection = new LdapConnection(identifier)
         {
             AuthType = AuthType.Negotiate,
-            Timeout = TimeSpan.FromSeconds(_options.ConnectTimeoutSeconds),
-            Credential = _options.CredentialsConfigured
-                ? new NetworkCredential(_options.Username, _options.Password)
+            Timeout = TimeSpan.FromSeconds(options.ConnectTimeoutSeconds),
+            Credential = options.CredentialsConfigured
+                ? new NetworkCredential(options.Username, options.Password)
                 : CredentialCache.DefaultNetworkCredentials
         };
 
         connection.SessionOptions.ProtocolVersion = 3;
-        connection.SessionOptions.SecureSocketLayer = _options.UseSsl;
+        connection.SessionOptions.SecureSocketLayer = options.UseSsl;
         return connection;
     }
 
@@ -790,14 +793,16 @@ public sealed class LdapActiveDirectoryClient(
         return false;
     }
 
-    private static string GetSafeMessage(LdapConnectionErrorType errorType) => errorType switch
+    private string GetSafeMessage(LdapConnectionErrorType errorType) => errorType switch
     {
         LdapConnectionErrorType.Configuration => "Active Directory configuration is invalid.",
-        LdapConnectionErrorType.Network => "LDAP server is unavailable.",
+        LdapConnectionErrorType.Network => _options.UseSsl
+            ? "LDAPS server is unavailable or a TLS connection could not be established."
+            : "LDAP server is unavailable.",
         LdapConnectionErrorType.Timeout => "LDAP connection timed out.",
         LdapConnectionErrorType.Authentication => "LDAP authentication failed.",
         LdapConnectionErrorType.BaseDn => "Configured Base DN could not be queried.",
-        LdapConnectionErrorType.Tls => "LDAPS/TLS connection failed.",
+        LdapConnectionErrorType.Tls => "LDAPS/TLS connection failed. Check the server certificate and client trust.",
         LdapConnectionErrorType.Protocol => "LDAP protocol error occurred.",
         _ => "LDAP connection test failed."
     };

@@ -9,6 +9,8 @@ using IdentityRiskAnalyzer.Web.Services.Delegation;
 using IdentityRiskAnalyzer.Web.Services.GroupAnalysis;
 using IdentityRiskAnalyzer.Web.Services.RiskRules;
 using IdentityRiskAnalyzer.Web.Services.Scoring;
+using IdentityRiskAnalyzer.Web.Services.SecurityEvents;
+using IdentityRiskAnalyzer.Web.Services.Exchange;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -24,6 +26,10 @@ public sealed class ActiveDirectoryScanService(
     DuplicateSpnAnalyzer duplicateSpns,
     RiskEngine riskEngine,
     RiskScoringService scoring,
+    ISecurityEventLogCollector securityEvents,
+    AuthenticationThreatAnalyzer authenticationThreats,
+    IOptions<SecurityEventLogOptions> securityEventOptions,
+    IExchangeDelegationCollector exchangeDelegation,
     IOptions<ActiveDirectoryOptions> adOptions,
     IOptions<RiskSettings> riskOptions,
     TimeProvider clock,
@@ -75,6 +81,56 @@ public sealed class ActiveDirectoryScanService(
             var groups = ldap.GetGroups(cancellationToken);
             logger.LogInformation("Scan {ScanRunId}: {Count} groups collected in {ElapsedMs} ms.", run.Id, groups.Count, stageTimer.ElapsedMilliseconds);
 
+            var eventErrors = 0;
+            IReadOnlyDictionary<Guid, IReadOnlyList<RiskFindingResult>> authenticationFindings =
+                new Dictionary<Guid, IReadOnlyList<RiskFindingResult>>();
+            if (securityEventOptions.Value.Enabled)
+            {
+                stage = "security events";
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var collection = securityEvents.Collect(cancellationToken);
+                    if (collection.Status == SecurityEventCollectionStatus.Success)
+                    {
+                        var threats = authenticationThreats.Analyze(collection.Events, cancellationToken);
+                        authenticationFindings = AuthenticationFindingMapper.Map(threats, principals, riskOptions.Value);
+                        eventErrors = collection.EventsSkipped + (collection.WasTruncated ? 1 : 0);
+                        logger.LogInformation("Scan {ScanRunId}: Security Event Log read {Read} events, skipped {Skipped}; {Threats} possible authentication threats.",
+                            run.Id, collection.EventsRead, collection.EventsSkipped, threats.Count);
+                    }
+                    else
+                    {
+                        eventErrors = 1;
+                        logger.LogWarning("Scan {ScanRunId}: optional Security Event Log collection returned {Status}: {Message}",
+                            run.Id, collection.Status, collection.ErrorMessage);
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception exception)
+                {
+                    eventErrors = 1;
+                    logger.LogWarning(exception, "Scan {ScanRunId}: optional Security Event Log analysis failed.", run.Id);
+                }
+            }
+
+            var exchangeErrors = 0;
+            try
+            {
+                var exchange = exchangeDelegation.Collect(cancellationToken);
+                if (exchange.Enabled && !exchange.Available)
+                {
+                    exchangeErrors = 1;
+                    logger.LogWarning("Scan {ScanRunId}: optional Exchange delegation collection unavailable: {Message}", run.Id, exchange.Message);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception exception)
+            {
+                exchangeErrors = 1;
+                logger.LogWarning(exception, "Scan {ScanRunId}: optional Exchange delegation collection failed.", run.Id);
+            }
+
             stage = "analysis";
             stageTimer.Restart();
             cancellationToken.ThrowIfCancellationRequested();
@@ -82,7 +138,7 @@ public sealed class ActiveDirectoryScanService(
             var pathsByUser = paths.GroupBy(path => path.PrincipalObjectGuid)
                 .ToDictionary(group => group.Key, group => group.ToArray());
             var duplicateSpnsByObject = duplicateSpns.AnalyzeAll(principals);
-            var errors = groups.Count(group => !group.MembersComplete);
+            var errors = groups.Count(group => !group.MembersComplete) + eventErrors + exchangeErrors;
             if (errors > 0)
             {
                 logger.LogWarning("Scan {ScanRunId}: {Count} groups have incomplete direct member lists.", run.Id, errors);
@@ -148,7 +204,9 @@ public sealed class ActiveDirectoryScanService(
                         ObjectType = ScanSnapshotMapper.GetObjectType(user)
                     };
                     var evaluation = riskEngine.EvaluateWithDiagnostics(context);
-                    var score = scoring.ScoreObject(user.ObjectGuid, context.ObjectName, evaluation.Findings);
+                    authenticationFindings.TryGetValue(user.ObjectGuid, out var eventFindings);
+                    var score = scoring.ScoreObject(user.ObjectGuid, context.ObjectName,
+                        evaluation.Findings.Concat(eventFindings ?? []));
                     var privilegedIds = privilege.PrivilegedMemberships.Select(item => item.GroupObjectGuid).ToHashSet();
 
                     // Complete one principal in temporary collections before adding it to the snapshot.

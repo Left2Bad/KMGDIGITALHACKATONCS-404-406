@@ -2,6 +2,8 @@
 
 ASP.NET Core MVC application for read-only Active Directory risk analysis.
 
+**Isolated AD test lab:** [scripts/adlab/README.md](scripts/adlab/README.md) contains the P1-16 Windows Server scripts, setup order, verification, expected findings, and cleanup. **FOR ISOLATED TEST ACTIVE DIRECTORY ONLY. DO NOT RUN AGAINST PRODUCTION DOMAIN.**
+
 ## Active Directory configuration
 
 The `ActiveDirectory` section in `src/IdentityRiskAnalyzer.Web/appsettings.json` contains non-secret connection settings:
@@ -16,6 +18,21 @@ The `ActiveDirectory` section in `src/IdentityRiskAnalyzer.Web/appsettings.json`
 | `PageSize` | Maximum number of LDAP entries requested per result page (1–1000) |
 
 Port 389 is typically used for LDAP. Port 636 is typically used for LDAPS. The server certificate must be trusted by the host running the application.
+
+For a deployment with a trusted domain controller certificate, use LDAPS:
+
+```json
+{
+  "ActiveDirectory": {
+    "Server": "dc01.adlab.test",
+    "Port": 636,
+    "UseSsl": true,
+    "BaseDn": "DC=adlab,DC=test"
+  }
+}
+```
+
+Use the DC DNS hostname covered by its certificate. `UseSsl=true` enables LDAPS immediately on the configured port (normally 636); it does not enable StartTLS. The application uses the operating system's certificate validation and does not accept untrusted or mismatched certificates, including in Development. Explicit credentials remain in User Secrets or protected deployment configuration. The isolated lab instructions for CA, DC enrollment, client trust, and verification are in [scripts/adlab/README.md](scripts/adlab/README.md).
 
 Store explicit credentials with .NET User Secrets during development:
 
@@ -126,4 +143,32 @@ Every scan keeps separate object snapshots, all shortest group membership paths,
 
 The prominent **AD Security Score** runs from 0 to 100, with 100 representing lower average detected risk. **Account Risk Score** runs in the opposite direction. A null security score appears as **No data**. Findings and accounts are counted separately by severity. Other counters include analysed, service, privileged, and stale accounts. **Stale Accounts** counts distinct object GUIDs with saved finding `IRA-ACCOUNT-001`; the dashboard does not recalculate inactivity rules. Top risky accounts follow risk score, critical finding count, total finding count, stable name, and GUID order. Categories come from saved findings and include distinct affected-account counts.
 
-The history chart and accessible table show up to ten usable ScanRuns in creation order, oldest to newest, on a fixed 0–100 scale. Failed scans are excluded. The chart uses server-rendered HTML and CSS; no Chart.js or frontend build is required. The dashboard also lists high-risk privileged accounts, service accounts ordered by risk score, and the most important findings. Account links currently open the persisted Scan Details page; individual persisted account details are reserved for P1-14.
+The history chart and accessible table show up to ten usable ScanRuns in creation order, oldest to newest, on a fixed 0–100 scale. Failed scans are excluded. The chart uses server-rendered HTML and CSS; no Chart.js or frontend build is required. The dashboard also lists high-risk privileged accounts, service accounts ordered by risk score, and the most important findings. Account links open historical account details for the displayed ScanRun.
+
+## Historical Account Details
+
+`/Scans/{scanId}/Objects/{objectGuid}` displays an account from one specific saved ScanRun. The same object GUID can have a different Risk Score, Risk Level, findings, memberships, and delegation in another scan. The page reads only SQLite; it does not contact LDAP or rerun rules or current scoring settings. It shows the saved status, activity, privilege and service-account flags, all saved findings with evidence and recommendations, every privileged path, delegation mechanisms and targets, and all group memberships in pages of 50. Invalid historical `PathJson` or `TargetsJson` produces a visible fallback and a server warning instead of a page failure.
+
+The score breakdown sums nonnegative points from that object's saved findings. The final Account Risk Score and Risk Level remain the stored snapshot values, including when accumulated points exceed the 100-point cap. The historical snapshot currently stores `IsServiceAccount` but not service-account detection method, confidence, or all raw LDAP attributes; the page does not infer or fetch those missing details. Live AD diagnostic pages remain separate from historical scan results.
+
+## CSV Export
+
+Completed and CompletedWithErrors scans provide separate **Accounts CSV** and **Findings CSV** downloads from Scan Details. The endpoints are `GET /Scans/{scanId}/Export/Accounts` and `GET /Scans/{scanId}/Export/Findings`. Failed, Running, Cancelled, and missing scans return 404 rather than an apparent empty report. A completed scan with no accounts or findings produces a header-only file.
+
+Both reports read the specified historical SQLite snapshot only. Export never contacts LDAP or reruns rules, analysis, or scoring. Accounts include saved account risk values and a grouped count of saved findings; Findings include the saved evidence, recommendation, risk points, and the matching snapshot's object risk score and level. No credentials or passwords are included.
+
+The files use semicolon delimiters, UTF-8 with a BOM, and CRLF line endings. Text containing semicolons, quotes, or line breaks is quoted and escaped; multiline evidence is preserved. Potential spreadsheet formulas in text fields are prefixed with an apostrophe before CSV escaping. Numeric fields remain numeric. Booleans use lowercase `true` and `false`; unknown nullable booleans and missing dates are empty cells. Timestamps use ISO 8601 UTC with a `Z` suffix. CSV files are generated in memory and named with the numeric ScanRun ID.
+
+## Optional Security Event Log Analysis
+
+`SecurityEventLog:Enabled` is `false` by default. When enabled during a ScanRun, the Windows collector reads only Security events 4625 (failed logon), 4771 (Kerberos pre-authentication failure), 4776 (credential validation failure), and 4740 (account lockout) from `SecurityEventLog:Server`, or from `ActiveDirectory:Server` if the override is empty. Event 4740 is retained as context; the two current heuristics count failed-authentication events only. The collector reads an indexed time window (`LookbackMinutes`, default 60) and stops at `MaximumEvents` (default 10,000). It normalizes only event metadata and never reads password or hash data. Repeated record IDs are ignored.
+
+The **Possible Password Spray** heuristic requires at least 10 failures involving at least 5 distinct usernames from one source IP or workstation within 10 minutes. **Possible Brute Force** requires at least 10 failures against one case-insensitive username within 10 minutes, regardless of source. All thresholds and windows are configurable. These are indicators for investigation, not proof of attack or compromise; distributed sources, duplicate event types and incomplete audit coverage can cause misses or false positives. No automatic account changes are made.
+
+Mapped scan principals receive object findings `IRA-AUTH-001` (High, 30 points) and `IRA-AUTH-002` (High, 25 points). Unknown or ambiguous usernames receive no object finding; the collector does not make LDAP lookups for them. Authentication findings enter object scoring before the snapshot is saved, so saved findings and scores remain consistent. Enabling the feature when the Security log is unavailable, including on a non-Windows host, marks an otherwise successful scan `CompletedWithErrors` and increments `ErrorsCount`. Skipped malformed records and truncated event windows are also counted. With the feature disabled, the collector is not called.
+
+The scanner may need membership in the DC's **Event Log Readers** group, the DC's remote Event Log access policy and firewall access. In the isolated `adlab.test` lab only, run `scripts/adlab/11-Configure-EventLogReader.ps1 -ConfirmOptionalEventLogAccess` in an elevated PowerShell session on DC01. This script checks the expected single-DC lab and scanner account, then adds the scanner to the group once. It does not grant Domain Admin rights. A fresh scanner logon token may be required. To test safely, use a small fixed set of lab accounts and a few controlled failed logons; do not run generic credential spraying tools. Real DC event collection and attack simulations were not performed in this development environment.
+
+## Optional Exchange delegation inventory
+
+`ExchangeDelegation:Enabled` is `false` by default. The read-only inventory contract and model distinguish **FullAccess**, **SendAs** and **SendOnBehalf** mailbox delegation from Kerberos delegation. No Exchange connection or mailbox permission reader is configured in this deployment; enabling the flag reports the integration as unavailable and records a recoverable scan error. It never produces fabricated mailbox permissions. A supported Exchange session, read-only collector, persistence and operational verification would be needed before this inventory can be used. No Exchange Risk Rule is assigned. Exchange integration was not tested against a real Exchange environment.

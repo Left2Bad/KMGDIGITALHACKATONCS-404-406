@@ -4,3 +4,9 @@
 *.db
 *.db-shm
 *.db-wal
+scripts/adlab/LabSecrets.local.ps1
+*.pfx
+*.p12
+*.key
+*.pvk
+scripts/adlab/*.cer

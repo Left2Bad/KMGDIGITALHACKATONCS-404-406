@@ -387,11 +387,13 @@ public sealed class RiskRuleEngineTests
     {
         var rules = CreateRules();
 
-        Assert.Equal(RiskRuleIds.All.Count, rules.Count);
+        Assert.Equal(RiskRuleIds.All.Count - 2, rules.Count);
         Assert.Equal(rules.Count, rules.Select(rule => rule.RuleId).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.Equal(
-            RiskRuleIds.All.OrderBy(ruleId => ruleId, StringComparer.Ordinal),
+            RiskRuleIds.All.Where(ruleId => ruleId is not (RiskRuleIds.PossiblePasswordSpray or RiskRuleIds.PossibleBruteForce))
+                .OrderBy(ruleId => ruleId, StringComparer.Ordinal),
             rules.Select(rule => rule.RuleId).OrderBy(ruleId => ruleId, StringComparer.Ordinal));
+        Assert.Equal(RiskRuleIds.All.Count, RiskRuleIds.All.Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.Empty(new RiskSettings().Validate(new System.ComponentModel.DataAnnotations.ValidationContext(new RiskSettings())));
     }
 

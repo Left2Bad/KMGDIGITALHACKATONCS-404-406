@@ -13,7 +13,7 @@
     <dt class="col-sm-3">Port</dt>
     <dd class="col-sm-9">@Model.Port</dd>
 
-    <dt class="col-sm-3">Protocol</dt>
+    <dt class="col-sm-3">Connection security</dt>
     <dd class="col-sm-9">@Model.Protocol</dd>
 
     <dt class="col-sm-3">Base DN</dt>
@@ -25,6 +25,11 @@
     <dt class="col-sm-3">Credentials configured</dt>
     <dd class="col-sm-9">@(Model.CredentialsConfigured ? "Yes" : "No — current identity will be used")</dd>
 </dl>
+
+@if (Model.Protocol == "LDAP")
+{
+    <div class="alert alert-info" role="status">LDAP transport is not protected by LDAPS/TLS. Configure a trusted DC certificate and use LDAPS on port 636 when available.</div>
+}
 
 <form asp-controller="ActiveDirectory" asp-action="TestConnection" method="post">
     @Html.AntiForgeryToken()
@@ -39,13 +44,14 @@
 @if (Model.TestResult is { } result)
 {
     <div class="alert @(result.Success ? "alert-success" : "alert-danger") mt-4" role="alert">
-        <h2 class="h5">@(result.Success ? "Connection successful" : "Connection failed")</h2>
+        <h2 class="h5">@(result.Success ? (result.UseSsl ? "LDAPS connection succeeded" : "LDAP connection succeeded") : "Connection failed")</h2>
         <p class="mb-1">@result.Message</p>
         @if (result.Success)
         {
             <div>Server: @result.Server</div>
             <div>Port: @result.Port</div>
             <div>Protocol: @(result.UseSsl ? "LDAPS" : "LDAP")</div>
+            <div>TLS: @(result.UseSsl ? "Enabled" : "Disabled")</div>
             <div>Duration: @result.DurationMs ms</div>
         }
     </div>

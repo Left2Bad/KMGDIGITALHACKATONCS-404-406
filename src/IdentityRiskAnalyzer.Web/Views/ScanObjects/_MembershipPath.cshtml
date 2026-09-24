@@ -1,0 +1,22 @@
+@model IdentityRiskAnalyzer.Web.ViewModels.HistoricalMembershipViewModel
+@if (!Model.PathAvailable)
+{
+    <span class="text-warning">Path data could not be parsed.</span>
+}
+else if (Model.PathDisplayNames.Count == 0)
+{
+    <span class="text-muted">No path data was saved.</span>
+}
+else
+{
+    <span class="d-inline-flex flex-wrap align-items-center gap-1">
+        @for (var index = 0; index < Model.PathDisplayNames.Count; index++)
+        {
+            @if (index > 0)
+            {
+                <span class="text-muted" aria-hidden="true">→</span>
+            }
+            <span class="text-break">@Model.PathDisplayNames[index]</span>
+        }
+    </span>
+}

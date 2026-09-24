@@ -9,4 +9,5 @@ public static class RiskCategories
     public const string Delegation = "Delegation";
     public const string ActiveDirectory = "ActiveDirectory";
     public const string Spn = "SPN";
+    public const string Authentication = "Authentication";
 }

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 
 namespace IdentityRiskAnalyzer.Web.Options;
 
@@ -32,6 +33,13 @@ public sealed class ActiveDirectoryOptions : IValidatableObject
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
+        if (UseSsl && IPAddress.TryParse(Server, out _))
+        {
+            yield return new ValidationResult(
+                "Use the domain controller DNS hostname for LDAPS certificate name validation.",
+                [nameof(Server)]);
+        }
+
         var hasUsername = !string.IsNullOrWhiteSpace(Username);
         var hasPassword = !string.IsNullOrWhiteSpace(Password);
 
