@@ -10,3 +10,4 @@ scripts/adlab/LabSecrets.local.ps1
 *.key
 *.pvk
 scripts/adlab/*.cer
+.run/

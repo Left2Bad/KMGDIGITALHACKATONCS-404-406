@@ -79,4 +79,13 @@ public class LdapsConnectionTests
 
         Assert.Contains(errors, error => error.MemberNames.Contains(nameof(options.Server)));
     }
+
+    [Fact]
+    public void DomainQualifiedScannerNameUsesSeparateDomainForNegotiate()
+    {
+        var credential = LdapActiveDirectoryClient.CreateCredential("ADLAB\\svc_ira_scanner", "test-password");
+
+        Assert.Equal("ADLAB", credential.Domain);
+        Assert.Equal("svc_ira_scanner", credential.UserName);
+    }
 }

@@ -9,7 +9,7 @@ $null = Assert-LabDomain
 Assert-LabStructure
 
 $normalUsers = @('lab_clean_user', 'lab_expired_user', 'lab_pne_user', 'lab_direct_admin', 'lab_nested_admin', 'lab_multi_admin', 'lab_locked_user')
-$serviceUsers = @('svc_sql', 'svc_unconstrained', 'svc_constrained', 'svc_protocol_transition', 'svc_rbcd_source', 'svc_rbcd_target')
+$serviceUsers = @('svc_sql', 'svc_unconstrained', 'svc_constrained', 'svc_protocol_trans', 'svc_rbcd_source', 'svc_rbcd_target')
 $missing = @($normalUsers | Where-Object { -not (Get-LabUser -SamAccountName $_ -ExpectedParentDn $Lab.UsersDn) })
 $missing += @($serviceUsers | Where-Object { -not (Get-LabUser -SamAccountName $_ -ExpectedParentDn $Lab.ServiceAccountsDn) })
 if ($missing.Count -gt 0 -and -not $DefaultUserPassword) {

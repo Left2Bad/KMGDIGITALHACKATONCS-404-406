@@ -15,7 +15,7 @@
 | `lab_multi_admin` | Direct Backup Operators and Server Operators member | `IRA-PRIV-001`, `IRA-PRIV-003` | Two direct privileged roles (possibly two `IRA-PRIV-001` rows) |
 | `svc_unconstrained` | SPN and `TRUSTED_FOR_DELEGATION` | `IRA-DELEGATION-001` | Unconstrained UAC flag |
 | `svc_constrained` | Unique account SPN and `msDS-AllowedToDelegateTo` | `IRA-DELEGATION-002` | Target `HTTP/app01.adlab.test` |
-| `svc_protocol_transition` | Delegation target and `TRUSTED_TO_AUTH_FOR_DELEGATION` | `IRA-DELEGATION-003` | Target and UAC flag; no duplicate constrained classification |
+| `svc_protocol_trans` | Delegation target and `TRUSTED_TO_AUTH_FOR_DELEGATION` | `IRA-DELEGATION-003` | Target and UAC flag; no duplicate constrained classification |
 | `svc_rbcd_target` | RBCD permits `svc_rbcd_source` | `IRA-DELEGATION-004` | RBCD attribute present; ACL details are not parsed by the app |
 | `lab_locked_user` | Lab-only PSO plus actual failed authentication attempts | `IRA-ACCOUNT-003` | Current `LockedOut` and computed UAC `LOCKOUT` |
 | `gmsa_demo` | Real `msDS-GroupManagedServiceAccount` object | No required finding | Snapshot `IsServiceAccount = true` |

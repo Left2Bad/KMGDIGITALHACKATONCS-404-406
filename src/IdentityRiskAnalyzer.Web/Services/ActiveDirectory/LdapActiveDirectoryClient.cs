@@ -704,13 +704,21 @@ public sealed class LdapActiveDirectoryClient(
             AuthType = AuthType.Negotiate,
             Timeout = TimeSpan.FromSeconds(options.ConnectTimeoutSeconds),
             Credential = options.CredentialsConfigured
-                ? new NetworkCredential(options.Username, options.Password)
+                ? CreateCredential(options.Username!, options.Password!)
                 : CredentialCache.DefaultNetworkCredentials
         };
 
         connection.SessionOptions.ProtocolVersion = 3;
         connection.SessionOptions.SecureSocketLayer = options.UseSsl;
         return connection;
+    }
+
+    internal static NetworkCredential CreateCredential(string username, string password)
+    {
+        var separator = username.IndexOf('\\');
+        return separator > 0 && separator < username.Length - 1
+            ? new NetworkCredential(username[(separator + 1)..], password, username[..separator])
+            : new NetworkCredential(username, password);
     }
 
     private List<string> ValidateOptions()

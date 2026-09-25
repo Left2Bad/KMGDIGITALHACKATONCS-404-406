@@ -15,7 +15,7 @@ $ouDefinitions = @(
     @{ Name = $Lab.ServersOuName; Parent = $Lab.RootDn; Dn = $Lab.ServersDn }
 )
 foreach ($definition in $ouDefinitions) {
-    $existing = Get-ADOrganizationalUnit -Identity $definition.Dn -Properties Description -ErrorAction SilentlyContinue
+    $existing = Get-ADOrganizationalUnit -LDAPFilter "(distinguishedName=$($definition.Dn))" -SearchBase $Lab.BaseDn -Properties Description -ErrorAction Stop
     if ($existing) {
         if ($existing.Description -cne $Lab.Marker) { throw ('OU already exists without the lab marker: {0}' -f $definition.Dn) }
         Write-LabStep SKIP ('OU exists: {0}' -f $definition.Dn)

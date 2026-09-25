@@ -47,7 +47,8 @@ function Ensure-DelegationTarget {
 }
 
 function Ensure-LockoutPolicy {
-    $pso = Get-ADFineGrainedPasswordPolicy -Identity $Lab.LockoutPsoName -Properties Description -ErrorAction SilentlyContinue
+    $pso = Get-ADFineGrainedPasswordPolicy -Filter * -Properties Description -ErrorAction Stop |
+        Where-Object Name -EQ $Lab.LockoutPsoName
     if (-not $pso) {
         New-ADFineGrainedPasswordPolicy -Name $Lab.LockoutPsoName -Description $Lab.Marker -Precedence 1 -ComplexityEnabled $true -MinPasswordLength 8 -PasswordHistoryCount 0 -MinPasswordAge '00:00:00' -MaxPasswordAge '90.00:00:00' -LockoutThreshold 3 -LockoutDuration '00:30:00' -LockoutObservationWindow '00:10:00' -ErrorAction Stop | Out-Null
         Write-LabStep OK ('Created lab-only PSO: {0}' -f $Lab.LockoutPsoName)
@@ -79,7 +80,7 @@ function Ensure-ActualLockout {
     $identifier = New-Object System.DirectoryServices.Protocols.LdapDirectoryIdentifier($Lab.Server, 389)
     for ($attempt = 1; $attempt -le 3; $attempt++) {
         $wrongPassword = [Guid]::NewGuid().ToString('N')
-        $credential = New-Object System.Net.NetworkCredential(("{0}\lab_locked_user" -f $Lab.NetbiosName), $wrongPassword)
+        $credential = New-Object System.Net.NetworkCredential('lab_locked_user', $wrongPassword, $Lab.NetbiosName)
         $connection = New-Object System.DirectoryServices.Protocols.LdapConnection($identifier, $credential, [System.DirectoryServices.Protocols.AuthType]::Negotiate)
         try {
             $connection.Timeout = [TimeSpan]::FromSeconds(10)
@@ -106,7 +107,7 @@ function Ensure-ActualLockout {
 function Ensure-LabGmsa {
     $controllers = @(Get-ADDomainController -Filter * -Server $Lab.Server)
     if ($controllers.Count -ne 1) { throw 'gMSA fast KDS setup is permitted only in the single-DC lab.' }
-    if ([string]$domain.DomainMode -notin @('Windows2012Domain', 'Windows2012R2Domain', 'Windows2016Domain')) {
+    if ([string]$domain.DomainMode -notin @('Windows2012Domain', 'Windows2012R2Domain', 'Windows2016Domain', 'Windows2025Domain')) {
         throw 'gMSA requires Windows Server 2012 domain functional level or later.'
     }
     Import-Module Kds -ErrorAction Stop
@@ -143,7 +144,7 @@ foreach ($name in @('lab_pne_user', 'svc_sql')) {
 Ensure-LabSpn -AccountName 'svc_sql' -Spn ("MSSQLSvc/sql01.{0}:1433" -f $Lab.DomainName)
 Ensure-LabSpn -AccountName 'svc_unconstrained' -Spn ("HTTP/unconstrained.{0}" -f $Lab.DomainName)
 Ensure-LabSpn -AccountName 'svc_constrained' -Spn ("HTTP/constrained.{0}" -f $Lab.DomainName)
-Ensure-LabSpn -AccountName 'svc_protocol_transition' -Spn ("HTTP/protocol.{0}" -f $Lab.DomainName)
+Ensure-LabSpn -AccountName 'svc_protocol_trans' -Spn ("HTTP/protocol.{0}" -f $Lab.DomainName)
 
 # Direct and nested group edges. Built-in groups remain outside the lab OU by AD design.
 $backup = Get-ADGroup -Identity 'S-1-5-32-551'
@@ -165,9 +166,9 @@ Set-ADAccountControl -Identity $unconstrained -TrustedForDelegation $true -Error
 Write-LabStep UPDATE 'Enabled TRUSTED_FOR_DELEGATION on svc_unconstrained.'
 $targetSpn = 'HTTP/app01.{0}' -f $Lab.DomainName
 Ensure-DelegationTarget -AccountName 'svc_constrained' -TargetSpn $targetSpn
-Ensure-DelegationTarget -AccountName 'svc_protocol_transition' -TargetSpn $targetSpn
-Set-ADAccountControl -Identity (Require-User -Name 'svc_protocol_transition' -Service) -TrustedToAuthForDelegation $true -ErrorAction Stop
-Write-LabStep UPDATE 'Enabled TRUSTED_TO_AUTH_FOR_DELEGATION on svc_protocol_transition.'
+Ensure-DelegationTarget -AccountName 'svc_protocol_trans' -TargetSpn $targetSpn
+Set-ADAccountControl -Identity (Require-User -Name 'svc_protocol_trans' -Service) -TrustedToAuthForDelegation $true -ErrorAction Stop
+Write-LabStep UPDATE 'Enabled TRUSTED_TO_AUTH_FOR_DELEGATION on svc_protocol_trans.'
 $rbcdSource = Require-User -Name 'svc_rbcd_source' -Service
 $rbcdTarget = Require-User -Name 'svc_rbcd_target' -Service
 Set-ADUser -Identity $rbcdTarget -PrincipalsAllowedToDelegateToAccount $rbcdSource -ErrorAction Stop
