@@ -71,8 +71,8 @@ Add-Check 'Constrained' 'svc_constrained' {
     @($u.'msDS-AllowedToDelegateTo' | Where-Object { $_ -ieq ("HTTP/app01.{0}" -f $Lab.DomainName) }).Count -eq 1 -and
     -not $u.TrustedToAuthForDelegation
 }
-Add-Check 'Protocol transition' 'svc_protocol_transition' {
-    $u = Get-CheckedUser 'svc_protocol_transition' -Service
+Add-Check 'Protocol transition' 'svc_protocol_trans' {
+    $u = Get-CheckedUser 'svc_protocol_trans' -Service
     $u.TrustedToAuthForDelegation -and
     @($u.'msDS-AllowedToDelegateTo' | Where-Object { $_ -ieq ("HTTP/app01.{0}" -f $Lab.DomainName) }).Count -eq 1
 }
@@ -81,7 +81,10 @@ Add-Check 'RBCD' 'svc_rbcd_target' {
     $source = Get-CheckedUser 'svc_rbcd_source' -Service
     $rbcd = $u.'msDS-AllowedToActOnBehalfOfOtherIdentity'
     $allowed = @(Get-ADUser -Identity $u -Properties PrincipalsAllowedToDelegateToAccount | Select-Object -ExpandProperty PrincipalsAllowedToDelegateToAccount)
-    $rbcd -and @($allowed | Where-Object { $_.DistinguishedName -ieq $source.DistinguishedName }).Count -gt 0
+    $rbcd -and @($allowed | Where-Object {
+        ($_ -is [string] -and $_ -ieq $source.DistinguishedName) -or
+        ($_.DistinguishedName -ieq $source.DistinguishedName)
+    }).Count -gt 0
 }
 Add-Check 'Locked' 'lab_locked_user' {
     $u = Get-CheckedUser 'lab_locked_user'

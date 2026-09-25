@@ -35,13 +35,13 @@ cd C:\Path\To\IdentityRiskAnalyzer\scripts\adlab
 | OU | Объекты |
 | --- | --- |
 | Users | `lab_clean_user`, `lab_expired_user`, `lab_pne_user`, `lab_direct_admin`, `lab_nested_admin`, `lab_multi_admin`, `lab_locked_user` |
-| ServiceAccounts | `svc_sql`, `svc_unconstrained`, `svc_constrained`, `svc_protocol_transition`, `svc_rbcd_source`, `svc_rbcd_target`, `svc_ira_scanner`, `gmsa_demo` |
+| ServiceAccounts | `svc_sql`, `svc_unconstrained`, `svc_constrained`, `svc_protocol_trans`, `svc_rbcd_source`, `svc_rbcd_target`, `svc_ira_scanner`, `gmsa_demo` |
 | Groups | `DemoHelpDesk`, `DemoITAdmins`, `DemoGmsaHosts` |
 | Servers | Пустая OU для будущей структуры |
 
 Встроенные `Backup Operators`, `Server Operators` и `Domain Admins` находятся вне lab OU. `lab_direct_admin` входит в Backup Operators; `lab_multi_admin` — в Backup Operators и Server Operators. Вложенный путь: `lab_nested_admin → DemoHelpDesk → DemoITAdmins → Domain Admins` (глубина 3). В Domain Admins добавляется только `DemoITAdmins`.
 
-`svc_unconstrained` имеет уникальный SPN и флаг `TRUSTED_FOR_DELEGATION`. У `svc_constrained` настроен SPN и `msDS-AllowedToDelegateTo = HTTP/app01.adlab.test`. У `svc_protocol_transition` настроена та же цель и флаг `TRUSTED_TO_AUTH_FOR_DELEGATION`. Для `svc_rbcd_target` через `PrincipalsAllowedToDelegateToAccount` разрешается delegation от `svc_rbcd_source`; бинарный descriptor вручную не создаётся. Обязательные RuleId и evidence приведены в [EXPECTED_FINDINGS.md](EXPECTED_FINDINGS.md) и машиночитаемом `ExpectedFindings.psd1`.
+`svc_unconstrained` имеет уникальный SPN и флаг `TRUSTED_FOR_DELEGATION`. У `svc_constrained` настроен SPN и `msDS-AllowedToDelegateTo = HTTP/app01.adlab.test`. У `svc_protocol_trans` настроена та же цель и флаг `TRUSTED_TO_AUTH_FOR_DELEGATION`. Для `svc_rbcd_target` через `PrincipalsAllowedToDelegateToAccount` разрешается delegation от `svc_rbcd_source`; бинарный descriptor вручную не создаётся. Обязательные RuleId и evidence приведены в [EXPECTED_FINDINGS.md](EXPECTED_FINDINGS.md) и машиночитаемом `ExpectedFindings.psd1`.
 
 ## Подключение Identity Risk Analyzer
 

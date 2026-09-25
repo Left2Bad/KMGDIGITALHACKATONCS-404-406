@@ -7,7 +7,7 @@
     lab_multi_admin = @('IRA-PRIV-001', 'IRA-PRIV-003')
     svc_unconstrained = @('IRA-DELEGATION-001')
     svc_constrained = @('IRA-DELEGATION-002')
-    svc_protocol_transition = @('IRA-DELEGATION-003')
+    svc_protocol_trans = @('IRA-DELEGATION-003')
     svc_rbcd_target = @('IRA-DELEGATION-004')
     lab_locked_user = @('IRA-ACCOUNT-003')
 }

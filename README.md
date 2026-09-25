@@ -1,5 +1,11 @@
 # Identity Risk Analyzer — инструкция от первого запуска до демонстрации
 
+## Готовая демонстрация на Azure VM
+
+В этом репозитории находятся два проекта: основной Identity Risk Analyzer и второй проект Certificate Radar в папке `hackatonProject2` (Git submodule). Чтобы скачать оба проекта на новый компьютер, используйте `git clone --recurse-submodules https://github.com/MuhametaliSagiden/KMGDIGITALHACKATONCS-404-406-demo.git`. Если основной репозиторий уже скачан, выполните `git submodule update --init --recursive` в его папке.
+
+Для показа жюри на подготовленной Azure VM откройте [инструкцию для демонстрации](DEMO-ЖЮРИ-НАЧНИ-ЗДЕСЬ.md). Там есть запуск одной командой, адреса обеих страниц и пошаговый сценарий.
+
 Это руководство рассчитано на человека, который умеет пользоваться Windows и PowerShell, но раньше не настраивал Active Directory. Сначала создайте **изолированную лабораторию**, подключите приложение по обычному LDAP на порту 389, выполните настоящий scan и проверьте результаты. LDAPS и Security Event Log оставлены отдельными дополнительными главами.
 
 > [!CAUTION]
@@ -293,7 +299,7 @@ Set-Location C:\IdentityRiskAnalyzer\scripts\adlab
 | `svc_sql` | ServiceAccounts | SPN службы SQL и Password Never Expires; демонстрация service-account риска. |
 | `svc_unconstrained` | ServiceAccounts | SPN и флаг Unconstrained Delegation. |
 | `svc_constrained` | ServiceAccounts | Собственный SPN плюс заданная цель Constrained Delegation. |
-| `svc_protocol_transition` | ServiceAccounts | Цель delegation плюс Protocol Transition. |
+| `svc_protocol_trans` | ServiceAccounts | Цель delegation плюс Protocol Transition. |
 | `svc_rbcd_source` | ServiceAccounts | Источник, которому лаборатория разрешит RBCD на целевом объекте. |
 | `svc_rbcd_target` | ServiceAccounts | Целевой объект с настроенной RBCD. |
 | `DemoHelpDesk` | Groups | Первая группа в nested path. |
@@ -378,7 +384,7 @@ Set-Location C:\IdentityRiskAnalyzer\scripts\adlab
 | `lab_multi_admin` | Прямое членство в Backup Operators и Server Operators. | `IRA-PRIV-001` (для каждой группы), `IRA-PRIV-003` |
 | `svc_unconstrained` | SPN аккаунта и TRUSTED_FOR_DELEGATION. | `IRA-DELEGATION-001` |
 | `svc_constrained` | Свой SPN и цель `HTTP/app01.adlab.test`. | `IRA-DELEGATION-002` |
-| `svc_protocol_transition` | Цель `HTTP/app01.adlab.test` и TRUSTED_TO_AUTH_FOR_DELEGATION. | `IRA-DELEGATION-003` |
+| `svc_protocol_trans` | Цель `HTTP/app01.adlab.test` и TRUSTED_TO_AUTH_FOR_DELEGATION. | `IRA-DELEGATION-003` |
 | `svc_rbcd_target` | RBCD разрешает delegation от `svc_rbcd_source`. | `IRA-DELEGATION-004` |
 | `lab_locked_user` | Реально заблокирован после неуспешных входов, проверен computed UAC. | `IRA-ACCOUNT-003` |
 | `gmsa_demo` | Настоящий объект `msDS-GroupManagedServiceAccount`. | Finding не обязателен; снимок должен содержать `IsServiceAccount = true`. |
@@ -556,7 +562,7 @@ lab_nested_admin
 
 * `svc_unconstrained`: `IRA-DELEGATION-001`; в evidence должен быть факт TRUSTED_FOR_DELEGATION.
 * `svc_constrained`: `IRA-DELEGATION-002`; target — `HTTP/app01.adlab.test`.
-* `svc_protocol_transition`: `IRA-DELEGATION-003`; target и Protocol Transition. Правило более специфично, не ждите дополнительный constrained finding по той же конфигурации.
+* `svc_protocol_trans`: `IRA-DELEGATION-003`; target и Protocol Transition. Правило более специфично, не ждите дополнительный constrained finding по той же конфигурации.
 * `svc_rbcd_target`: `IRA-DELEGATION-004`; attribute RBCD настроен. MVP отмечает наличие, но не разбирает ACL security descriptor.
 * `lab_locked_user`: `IRA-ACCOUNT-003` только если аккаунт всё ещё locked на время scan. Его lockout истекает через 30 минут.
 * `gmsa_demo`: на details должен быть `IsServiceAccount = true`; обязательный risk finding для него не задан.
